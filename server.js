@@ -19,11 +19,9 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use("/", require("./routes/reports"));
 
 // SPA fallback — send index.html for any non-API route
-// This allows Vue Router's history mode to work correctly
+// Vue Router handles all frontend navigation client-side
 app.get("*", (req, res) => {
-  if (!req.path.startsWith("/api")) {
-    res.sendFile(path.join(__dirname, "public", "index.html"));
-  }
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 // Connect to MongoDB and start server
