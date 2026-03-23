@@ -57,7 +57,8 @@
               <input
                 type="text"
                 id="otherText"
-                v-model="form.otherText"
+                :value="form.otherText"
+                @input="form.otherText = $event.target.value.toUpperCase()"
                 placeholder="Describe the violation…"
               />
             </div>
@@ -77,7 +78,10 @@
               <input
                 type="text"
                 id="firstName"
-                v-model="form.apprehendedFirstName"
+                :value="form.apprehendedFirstName"
+                @input="
+                  form.apprehendedFirstName = $event.target.value.toUpperCase()
+                "
                 required
                 placeholder="First name"
               />
@@ -89,7 +93,10 @@
               <input
                 type="text"
                 id="lastName"
-                v-model="form.apprehendedLastName"
+                :value="form.apprehendedLastName"
+                @input="
+                  form.apprehendedLastName = $event.target.value.toUpperCase()
+                "
                 required
                 placeholder="Last name"
               />
@@ -103,7 +110,8 @@
               <input
                 type="text"
                 id="address"
-                v-model="form.address"
+                :value="form.address"
+                @input="form.address = $event.target.value.toUpperCase()"
                 required
                 placeholder="Street address, unit, etc."
               />
@@ -151,7 +159,8 @@
             <label class="field-label" for="remarks">Remarks / Notes</label>
             <textarea
               id="remarks"
-              v-model="form.remarks"
+              :value="form.remarks"
+              @input="form.remarks = $event.target.value.toUpperCase()"
               placeholder="Additional notes, circumstances, etc."
             />
           </div>
