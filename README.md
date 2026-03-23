@@ -137,3 +137,60 @@ To give enforcers access via a public URL while the server runs locally:
 - Or configure port forwarding on your router and share your public IP
 
 Replace `PORT` with whatever port is set in your `.env` file.
+
+---
+
+## Vue 3 Frontend (Vite)
+
+The frontend has been rewritten in Vue 3 with Vite. The backend (Node/Express/MongoDB) remains unchanged.
+
+### Development workflow
+
+Run both the Express server and Vite dev server at the same time in two separate terminals:
+
+```bash
+# Terminal 1 — Express API server
+npm run dev:server
+
+# Terminal 2 — Vite dev server with hot reload
+npm run dev:client
+```
+
+Then open **http://localhost:5173** in your browser. The Vite dev server proxies all `/api` requests to Express on port 3000, so everything works together.
+
+### Building for production
+
+When you are ready to deploy or share with enforcers:
+
+```bash
+# Install all dependencies (run once)
+npm run install:all
+
+# Build the Vue app into /public
+npm run build
+
+# Start Express — it will serve the built Vue app
+npm start
+```
+
+After building, enforcers access the app through Express on your configured port, exactly like before.
+
+### Project structure (client)
+
+```
+client/
+├── index.html              # Vite HTML entry point
+├── vite.config.js          # Vite config (proxy, build output)
+├── package.json
+└── src/
+    ├── main.js             # Vue app entry, router setup
+    ├── App.vue             # Root component (header, toast)
+    ├── style.css           # Global styles and CSS variables
+    ├── composables/
+    │   └── constants.js    # Shared data (barangays, officers, violations)
+    ├── components/
+    │   └── SignatureCanvas.vue
+    └── views/
+        ├── ReportForm.vue  # / route
+        └── ReportsList.vue # /reports route
+```

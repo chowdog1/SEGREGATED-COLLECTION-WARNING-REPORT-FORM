@@ -1,0 +1,82 @@
+export const BARANGAYS = [
+  "Addition Hills",
+  "Balong Bato",
+  "Batis",
+  "Corazon De Jesus",
+  "Ermitaño",
+  "Greenhills",
+  "St. Joseph",
+  "Isabelita",
+  "Kabayanan",
+  "Little Baguio",
+  "Maytunas",
+  "Onse",
+  "Pasadena",
+  "Pedro Cruz",
+  "Progreso",
+  "Rivera",
+  "Salapan",
+  "San Perfecto",
+  "Sta. Lucia",
+  "Tibagan",
+  "West Crame",
+];
+
+export const OFFICERS = [
+  "Aileen Lachica",
+  "Marielle Ybañez",
+  "Dwight Babagay",
+  "Charlotte Chan",
+  "Julius Cezar Pangan",
+  "John Paul Florida",
+  "Abraham Magturo",
+  "Angelita Pimentel",
+  "Abegail De Asis",
+  "Genevieve Delos Santos",
+  "Carmencita Valdemoro",
+  "Anna Pacheco",
+  "Gema Dequiña",
+  "Princess Eduarte",
+  "Rodel Pamintuan",
+  "Gladilien Landoy",
+  "Antonio Palanca",
+  "Gina Terana",
+  "Alfa Teodosio",
+  "Michelle Añora Mendoza",
+  "Joynalyn Collado",
+  "Rosario Jantar",
+  "Danalyn De Asis",
+  "Maria Luisa Brazil",
+];
+
+export const VIOLATIONS = [
+  { key: "co3504", code: "C.O 35-04", desc: "Unsegregated Waste" },
+  {
+    key: "co911",
+    code: "C.O 9-11",
+    desc: "Littering / Illegal Disposal of Garbage",
+  },
+  {
+    key: "co1424ab",
+    code: "C.O 14-24 (A&B)",
+    desc: "Smoking in Public Places",
+  },
+  {
+    key: "co1424rest",
+    code: "C.O 14-24 (C-V,X,Y,Z)",
+    desc: "Person in Charge",
+  },
+  {
+    key: "co1011",
+    code: "C.O 10-11",
+    desc: "Illegal Dumping to Waterways System",
+  },
+];
+
+export const VIOL_LABELS = {
+  co3504: "C.O 35-04 Unsegregated Waste",
+  co911: "C.O 9-11 Littering/Illegal Disposal",
+  co1424ab: "C.O 14-24 (A&B) Smoking",
+  co1424rest: "C.O 14-24 (C-V,X,Y,Z) Person in Charge",
+  co1011: "C.O 10-11 Illegal Dumping to Waterways",
+};
