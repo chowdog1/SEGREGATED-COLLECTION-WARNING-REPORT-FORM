@@ -15,7 +15,7 @@ const upload = multer({
   },
 });
 
-// Compress image buffer to tiny base64
+// Compress photo to WebP — smaller than JPEG at same quality
 async function compressImage(buffer) {
   const compressed = await sharp(buffer)
     .resize({
@@ -24,14 +24,13 @@ async function compressImage(buffer) {
       fit: "inside",
       withoutEnlargement: true,
     })
-    .jpeg({ quality: 40, progressive: true })
+    .webp({ quality: 45, effort: 6 })
     .toBuffer();
-  return "data:image/jpeg;base64," + compressed.toString("base64");
+  return "data:image/webp;base64," + compressed.toString("base64");
 }
 
-// Compress signature (smaller, grayscale)
+// Compress signature to WebP — much smaller than PNG, lossless for clean line art
 async function compressSignature(base64DataUrl) {
-  // strip data url prefix
   const base64 = base64DataUrl.replace(/^data:image\/\w+;base64,/, "");
   const buffer = Buffer.from(base64, "base64");
   const compressed = await sharp(buffer)
@@ -42,9 +41,9 @@ async function compressSignature(base64DataUrl) {
       withoutEnlargement: true,
     })
     .grayscale()
-    .png({ compressionLevel: 9, quality: 60 })
+    .webp({ lossless: true, effort: 6 })
     .toBuffer();
-  return "data:image/png;base64," + compressed.toString("base64");
+  return "data:image/webp;base64," + compressed.toString("base64");
 }
 
 // GET homepage (form)
@@ -296,11 +295,11 @@ router.get("/api/export", async (req, res) => {
     });
 
     const VIOL_LABELS = {
-      co3504: "C.O 35-04 - Unsegregated Waste",
-      co911: "C.O 9-11 - Littering/Illegal Disposal of Garbage",
-      co1424ab: "C.O 14-24 (A&B) - Smoking in Public Places",
-      co1424rest: "C.O 14-24 (C-V,X,Y,Z) - Person in Charge",
-      co1011: "C.O 10-11 - Illegal Dumping to Waterways",
+      co3504: "C.O 35-04 - UNSEGREGATED WASTE",
+      co911: "C.O 9-11 - LITTERING/ILLEGAL DISPOSAL OF GARBAGE",
+      co1424ab: "C.O 14-24 (A&B) - SMOKING IN PUBLIC PLACES",
+      co1424rest: "C.O 14-24 (C-V,X,Y,Z) - PERSON IN CHARGE",
+      co1011: "C.O 10-11 - ILLEGAL DUMPING TO WATERWAYS",
     };
 
     const IMAGE_ROW_HEIGHT = 80; // points
@@ -368,12 +367,17 @@ router.get("/api/export", async (req, res) => {
       for (let p = 0; p < Math.min(rowPhotos.length, 2); p++) {
         if (rowPhotos[p] && rowPhotos[p].length > 100) {
           try {
-            const photoBase64 = rowPhotos[p].replace(
+            // Re-compress to JPEG for Excel compatibility (ExcelJS doesn't support WebP)
+            const rawBase64 = rowPhotos[p].replace(
               /^data:image\/\w+;base64,/,
               "",
             );
+            const rawBuffer = Buffer.from(rawBase64, "base64");
+            const jpegBuffer = await sharp(rawBuffer)
+              .jpeg({ quality: 60 })
+              .toBuffer();
             const photoImgId = workbook.addImage({
-              base64: photoBase64,
+              base64: jpegBuffer.toString("base64"),
               extension: "jpeg",
             });
             sheet.addImage(photoImgId, {
