@@ -1,234 +1,243 @@
 <template>
   <div class="main-wrap">
-    <form @submit.prevent="submitForm">
-      <div class="form-card">
-        <!-- SECTION 1: Violation Details -->
-        <div class="form-section">
-          <div class="section-title">
-            <span class="sec-num">1</span> Violation Details
-          </div>
-          <div class="form-row" style="grid-template-columns: 220px 1fr">
-            <div class="form-group">
-              <label class="field-label" for="dateIssued"
-                >Date Issued <span class="req">*</span></label
-              >
-              <input
-                type="date"
-                id="dateIssued"
-                v-model="form.dateIssued"
-                required
-              />
+    <Transition name="form-fade">
+      <form v-if="formVisible" @submit.prevent="submitForm">
+        <div class="form-card">
+          <!-- SECTION 1: Violation Details -->
+          <div class="form-section">
+            <div class="section-title">
+              <span class="sec-num">1</span> Violation Details
             </div>
-          </div>
-
-          <label
-            class="field-label"
-            style="margin-bottom: 10px; display: block"
-          >
-            Violations <span class="req">*</span>
-          </label>
-          <div class="violations-grid">
-            <label
-              v-for="v in VIOLATIONS"
-              :key="v.key"
-              :class="['viol-item', form.violations[v.key] ? 'checked' : '']"
-            >
-              <input type="checkbox" v-model="form.violations[v.key]" />
-              <div class="viol-label">
-                <span class="viol-code">{{ v.code }}</span>
-                <span class="viol-desc">{{ v.desc }}</span>
+            <div class="form-row" style="grid-template-columns: 220px 1fr">
+              <div class="form-group">
+                <label class="field-label" for="dateIssued"
+                  >Date Issued <span class="req">*</span></label
+                >
+                <input
+                  type="date"
+                  id="dateIssued"
+                  v-model="form.dateIssued"
+                  required
+                />
               </div>
-            </label>
+            </div>
+
             <label
-              :class="['viol-item', form.violations.other ? 'checked' : '']"
+              class="field-label"
+              style="margin-bottom: 10px; display: block"
             >
-              <input type="checkbox" v-model="form.violations.other" />
-              <div class="viol-label">
-                <span class="viol-code">Other</span>
-                <span class="viol-desc">Specify below</span>
+              Violations <span class="req">*</span>
+            </label>
+            <div class="violations-grid">
+              <label
+                v-for="v in VIOLATIONS"
+                :key="v.key"
+                :class="['viol-item', form.violations[v.key] ? 'checked' : '']"
+              >
+                <input type="checkbox" v-model="form.violations[v.key]" />
+                <div class="viol-label">
+                  <span class="viol-code">{{ v.code }}</span>
+                  <span class="viol-desc">{{ v.desc }}</span>
+                </div>
+              </label>
+              <label
+                :class="['viol-item', form.violations.other ? 'checked' : '']"
+              >
+                <input type="checkbox" v-model="form.violations.other" />
+                <div class="viol-label">
+                  <span class="viol-code">Other</span>
+                  <span class="viol-desc">Specify below</span>
+                </div>
+              </label>
+            </div>
+            <div v-if="form.violations.other" class="other-text-wrap">
+              <div class="form-group">
+                <label class="field-label" for="otherText"
+                  >Please specify other violation</label
+                >
+                <input
+                  type="text"
+                  id="otherText"
+                  :value="form.otherText"
+                  @input="form.otherText = $event.target.value.toUpperCase()"
+                  placeholder="Describe the violation…"
+                />
               </div>
-            </label>
-          </div>
-          <div v-if="form.violations.other" class="other-text-wrap">
-            <div class="form-group">
-              <label class="field-label" for="otherText"
-                >Please specify other violation</label
-              >
-              <input
-                type="text"
-                id="otherText"
-                :value="form.otherText"
-                @input="form.otherText = $event.target.value.toUpperCase()"
-                placeholder="Describe the violation…"
-              />
             </div>
           </div>
-        </div>
 
-        <!-- SECTION 2: Person Apprehended -->
-        <div class="form-section">
-          <div class="section-title">
-            <span class="sec-num">2</span> Person Apprehended
+          <!-- SECTION 2: Person Apprehended -->
+          <div class="form-section">
+            <div class="section-title">
+              <span class="sec-num">2</span> Person Apprehended
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="field-label" for="firstName"
+                  >First Name <span class="req">*</span></label
+                >
+                <input
+                  type="text"
+                  id="firstName"
+                  :value="form.apprehendedFirstName"
+                  @input="
+                    form.apprehendedFirstName =
+                      $event.target.value.toUpperCase()
+                  "
+                  required
+                  placeholder="First name"
+                />
+              </div>
+              <div class="form-group">
+                <label class="field-label" for="lastName"
+                  >Last Name <span class="req">*</span></label
+                >
+                <input
+                  type="text"
+                  id="lastName"
+                  :value="form.apprehendedLastName"
+                  @input="
+                    form.apprehendedLastName = $event.target.value.toUpperCase()
+                  "
+                  required
+                  placeholder="Last name"
+                />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="field-label" for="address"
+                  >Address <span class="req">*</span></label
+                >
+                <input
+                  type="text"
+                  id="address"
+                  :value="form.address"
+                  @input="form.address = $event.target.value.toUpperCase()"
+                  required
+                  placeholder="Street address, unit, etc."
+                />
+              </div>
+              <div class="form-group">
+                <label class="field-label" for="barangay"
+                  >Barangay <span class="req">*</span></label
+                >
+                <select id="barangay" v-model="form.barangay" required>
+                  <option value="">— Select Barangay —</option>
+                  <option v-for="b in BARANGAYS" :key="b" :value="b">
+                    {{ b }}
+                  </option>
+                </select>
+              </div>
+            </div>
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="field-label" for="firstName"
-                >First Name <span class="req">*</span></label
-              >
-              <input
-                type="text"
-                id="firstName"
-                :value="form.apprehendedFirstName"
-                @input="
-                  form.apprehendedFirstName = $event.target.value.toUpperCase()
-                "
-                required
-                placeholder="First name"
-              />
-            </div>
-            <div class="form-group">
-              <label class="field-label" for="lastName"
-                >Last Name <span class="req">*</span></label
-              >
-              <input
-                type="text"
-                id="lastName"
-                :value="form.apprehendedLastName"
-                @input="
-                  form.apprehendedLastName = $event.target.value.toUpperCase()
-                "
-                required
-                placeholder="Last name"
-              />
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="field-label" for="address"
-                >Address <span class="req">*</span></label
-              >
-              <input
-                type="text"
-                id="address"
-                :value="form.address"
-                @input="form.address = $event.target.value.toUpperCase()"
-                required
-                placeholder="Street address, unit, etc."
-              />
-            </div>
-            <div class="form-group">
-              <label class="field-label" for="barangay"
-                >Barangay <span class="req">*</span></label
-              >
-              <select id="barangay" v-model="form.barangay" required>
-                <option value="">— Select Barangay —</option>
-                <option v-for="b in BARANGAYS" :key="b" :value="b">
-                  {{ b }}
-                </option>
-              </select>
-            </div>
-          </div>
-        </div>
 
-        <!-- SECTION 3: Officers -->
-        <div class="form-section">
-          <div class="section-title">
-            <span class="sec-num">3</span> Environmental Enforcers / Officers
+          <!-- SECTION 3: Officers -->
+          <div class="form-section">
+            <div class="section-title">
+              <span class="sec-num">3</span> Environmental Enforcers / Officers
+            </div>
+            <div class="officers-grid">
+              <label
+                v-for="officer in OFFICERS"
+                :key="officer"
+                :class="[
+                  'officer-item',
+                  form.officers.includes(officer) ? 'checked' : '',
+                ]"
+              >
+                <input
+                  type="checkbox"
+                  :value="officer"
+                  v-model="form.officers"
+                />
+                <span>{{ officer }}</span>
+              </label>
+            </div>
           </div>
-          <div class="officers-grid">
-            <label
-              v-for="officer in OFFICERS"
-              :key="officer"
-              :class="[
-                'officer-item',
-                form.officers.includes(officer) ? 'checked' : '',
-              ]"
-            >
-              <input type="checkbox" :value="officer" v-model="form.officers" />
-              <span>{{ officer }}</span>
-            </label>
-          </div>
-        </div>
 
-        <!-- SECTION 4: Remarks -->
-        <div class="form-section">
-          <div class="section-title">
-            <span class="sec-num">4</span> Remarks
+          <!-- SECTION 4: Remarks -->
+          <div class="form-section">
+            <div class="section-title">
+              <span class="sec-num">4</span> Remarks
+            </div>
+            <div class="form-group">
+              <label class="field-label" for="remarks">Remarks / Notes</label>
+              <textarea
+                id="remarks"
+                :value="form.remarks"
+                @input="form.remarks = $event.target.value.toUpperCase()"
+                placeholder="Additional notes, circumstances, etc."
+              />
+            </div>
           </div>
-          <div class="form-group">
-            <label class="field-label" for="remarks">Remarks / Notes</label>
-            <textarea
-              id="remarks"
-              :value="form.remarks"
-              @input="form.remarks = $event.target.value.toUpperCase()"
-              placeholder="Additional notes, circumstances, etc."
+
+          <!-- SECTION 5: Signature -->
+          <div class="form-section">
+            <div class="section-title">
+              <span class="sec-num">5</span> Signature of Apprehended Person
+            </div>
+            <SignatureCanvas
+              @update="form.signatureData = $event"
+              ref="sigCanvas"
             />
           </div>
-        </div>
 
-        <!-- SECTION 5: Signature -->
-        <div class="form-section">
-          <div class="section-title">
-            <span class="sec-num">5</span> Signature of Apprehended Person
-          </div>
-          <SignatureCanvas
-            @update="form.signatureData = $event"
-            ref="sigCanvas"
-          />
-        </div>
-
-        <!-- SECTION 6: Photos -->
-        <div class="form-section">
-          <div class="section-title">
-            <span class="sec-num">6</span> Photo Evidence
-          </div>
-          <div class="photo-upload-row">
-            <div
-              v-for="n in [0, 1]"
-              :key="n"
-              :class="['photo-slot', photoPreviews[n] ? 'has-preview' : '']"
-            >
-              <div v-if="!photoPreviews[n]">
-                <div class="slot-icon">📷</div>
-                <div class="slot-label">Photo {{ n + 1 }} — Tap to upload</div>
+          <!-- SECTION 6: Photos -->
+          <div class="form-section">
+            <div class="section-title">
+              <span class="sec-num">6</span> Photo Evidence
+            </div>
+            <div class="photo-upload-row">
+              <div
+                v-for="n in [0, 1]"
+                :key="n"
+                :class="['photo-slot', photoPreviews[n] ? 'has-preview' : '']"
+              >
+                <div v-if="!photoPreviews[n]">
+                  <div class="slot-icon">📷</div>
+                  <div class="slot-label">
+                    Photo {{ n + 1 }} — Tap to upload
+                  </div>
+                </div>
+                <img
+                  v-else
+                  :src="photoPreviews[n]"
+                  class="photo-preview"
+                  :alt="`Photo ${n + 1} preview`"
+                />
+                <input
+                  type="file"
+                  accept="image/*"
+                  @change="onPhotoChange($event, n)"
+                />
               </div>
-              <img
-                v-else
-                :src="photoPreviews[n]"
-                class="photo-preview"
-                :alt="`Photo ${n + 1} preview`"
-              />
-              <input
-                type="file"
-                accept="image/*"
-                @change="onPhotoChange($event, n)"
-              />
             </div>
           </div>
-        </div>
 
-        <!-- Footer -->
-        <div class="form-footer">
-          <p>
-            All fields marked <strong style="color: var(--red)">*</strong> are
-            required.<br />Submitted reports are stored securely.
-          </p>
-          <button type="submit" class="btn-submit" :disabled="submitting">
-            <span
-              v-if="submitting"
-              class="spinner-sm"
-              style="
-                display: inline-block;
-                vertical-align: middle;
-                margin-right: 8px;
-                border-top-color: white;
-              "
-            ></span>
-            {{ submitting ? "Submitting…" : "Submit Warning Report" }}
-          </button>
+          <!-- Footer -->
+          <div class="form-footer">
+            <p>
+              All fields marked <strong style="color: var(--red)">*</strong> are
+              required.<br />Submitted reports are stored securely.
+            </p>
+            <button type="submit" class="btn-submit" :disabled="submitting">
+              <span
+                v-if="submitting"
+                class="spinner-sm"
+                style="
+                  display: inline-block;
+                  vertical-align: middle;
+                  margin-right: 8px;
+                  border-top-color: white;
+                "
+              ></span>
+              {{ submitting ? "Submitting…" : "Submit Warning Report" }}
+            </button>
+          </div>
         </div>
-      </div>
-    </form>
+      </form>
+    </Transition>
   </div>
 </template>
 
@@ -240,6 +249,7 @@ import { BARANGAYS, OFFICERS, VIOLATIONS } from "../composables/constants.js";
 const showToast = inject("showToast");
 const sigCanvas = ref(null);
 const submitting = ref(false);
+const formVisible = ref(true);
 const photoPreviews = ref([null, null]);
 const photoFiles = ref([null, null]);
 
@@ -310,11 +320,15 @@ async function submitForm() {
     const data = await res.json();
     if (data.success) {
       showToast("Report submitted successfully!");
+      // Fade out the form, scroll to top, then reset
+      formVisible.value = false;
+      window.scrollTo({ top: 0, behavior: "smooth" });
       setTimeout(() => {
         Object.assign(form, freshForm());
         photoPreviews.value = [null, null];
         photoFiles.value = [null, null];
         sigCanvas.value?.clear();
+        formVisible.value = true;
       }, 600);
     } else {
       showToast("Error: " + data.error, true);
@@ -554,6 +568,26 @@ async function submitForm() {
 .btn-submit:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+/* Fade transition on submit */
+.form-fade-enter-active {
+  transition:
+    opacity 0.4s ease,
+    transform 0.4s ease;
+}
+.form-fade-leave-active {
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+}
+.form-fade-enter-from {
+  opacity: 0;
+  transform: translateY(12px);
+}
+.form-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 
 @media (max-width: 600px) {
