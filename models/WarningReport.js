@@ -17,6 +17,12 @@ const warningReportSchema = new mongoose.Schema({
   barangay: { type: String, required: true },
   officers: [{ type: String }],
   remarks: { type: String, default: "" },
+  // geo location captured at time of submission
+  geo: {
+    latitude: { type: Number, default: null },
+    longitude: { type: Number, default: null },
+    accuracy: { type: Number, default: null }, // meters
+  },
   // base64 compressed signature
   signature: { type: String, default: "" },
   // compressed photos stored as base64

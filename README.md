@@ -95,6 +95,7 @@ npm start
 - Remarks field
 - Signature canvas with touch and mouse support, preserved across scroll and screen resize on mobile
 - Up to 2 photo uploads per report
+- Live geo-tagging using Leaflet and OpenStreetMap
 
 **Reports View**
 

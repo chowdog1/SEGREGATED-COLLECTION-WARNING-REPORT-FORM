@@ -100,6 +100,11 @@ router.post("/api/reports", upload.array("photos", 2), async (req, res) => {
       barangay: body.barangay,
       officers,
       remarks: body.remarks || "",
+      geo: {
+        latitude: body.geoLat ? parseFloat(body.geoLat) : null,
+        longitude: body.geoLng ? parseFloat(body.geoLng) : null,
+        accuracy: body.geoAcc ? parseFloat(body.geoAcc) : null,
+      },
       signature,
       photos,
     });
@@ -213,9 +218,29 @@ router.get("/api/reports/:id", async (req, res) => {
   }
 });
 
-// DELETE report
+// DELETE report — requires PIN
 router.delete("/api/reports/:id", async (req, res) => {
   try {
+    const { pin } = req.body;
+    const correctPin = process.env.DELETE_PIN;
+
+    if (!correctPin) {
+      return res
+        .status(500)
+        .json({
+          success: false,
+          error: "DELETE_PIN is not configured in .env",
+        });
+    }
+    if (!pin || pin.toString() !== correctPin.toString()) {
+      return res
+        .status(403)
+        .json({
+          success: false,
+          error: "Incorrect PIN. Deletion not authorized.",
+        });
+    }
+
     await WarningReport.findByIdAndDelete(req.params.id);
     res.json({ success: true });
   } catch (err) {
@@ -275,6 +300,7 @@ router.get("/api/export", async (req, res) => {
       { header: "Barangay", key: "barangay", width: 18 },
       { header: "Officers", key: "officers", width: 34 },
       { header: "Remarks", key: "remarks", width: 28 },
+      { header: "Location", key: "location", width: 26 },
       { header: "Signature", key: "signature", width: 24 },
       { header: "Photo 1", key: "photo1", width: 24 },
       { header: "Photo 2", key: "photo2", width: 24 },
@@ -328,6 +354,7 @@ router.get("/api/export", async (req, res) => {
         barangay: r.barangay,
         officers: (r.officers || []).join("\n"),
         remarks: r.remarks,
+        location: "",
         signature: "",
         photo1: "",
         photo2: "",
@@ -343,7 +370,28 @@ router.get("/api/export", async (req, res) => {
         };
       });
 
-      // Embed signature — col 7 (0-based), use tl + ext to stay inside cell
+      // Location cell — display as coordinates, hyperlink to Google Maps
+      const locCell = row.getCell("location");
+      if (r.geo && r.geo.latitude && r.geo.longitude) {
+        const lat = r.geo.latitude.toFixed(6);
+        const lng = r.geo.longitude.toFixed(6);
+        const mapsUrl = `https://maps.google.com/?q=${lat},${lng}`;
+        locCell.value = {
+          text: `${lat}, ${lng}`,
+          hyperlink: mapsUrl,
+        };
+        locCell.font = {
+          color: { argb: "FF1155CC" },
+          underline: true,
+          size: 10,
+        };
+        locCell.alignment = { vertical: "middle", horizontal: "left" };
+      } else {
+        locCell.value = "Not captured";
+        locCell.font = { color: { argb: "FF999999" }, italic: true, size: 10 };
+      }
+
+      // Embed signature — col 8 (0-based), shifted right by Location column
       if (r.signature && r.signature.length > 100) {
         try {
           const sigBase64 = r.signature.replace(/^data:image\/\w+;base64,/, "");
@@ -352,7 +400,7 @@ router.get("/api/export", async (req, res) => {
             extension: "png",
           });
           sheet.addImage(sigImgId, {
-            tl: { col: 7, row: rowIndex - 1 },
+            tl: { col: 8, row: rowIndex - 1 },
             ext: { width: Math.round(24 * 7), height: IMAGE_ROW_HEIGHT - 4 },
             editAs: "oneCell",
           });
@@ -361,13 +409,12 @@ router.get("/api/export", async (req, res) => {
         }
       }
 
-      // Embed photos — cols 8 and 9 (0-based)
-      const photoCols = [8, 9];
+      // Embed photos — cols 9 and 10 (0-based)
+      const photoCols = [9, 10];
       const rowPhotos = r.photos || [];
       for (let p = 0; p < Math.min(rowPhotos.length, 2); p++) {
         if (rowPhotos[p] && rowPhotos[p].length > 100) {
           try {
-            // Re-compress to JPEG for Excel compatibility (ExcelJS doesn't support WebP)
             const rawBase64 = rowPhotos[p].replace(
               /^data:image\/\w+;base64,/,
               "",

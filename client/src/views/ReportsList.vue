@@ -136,7 +136,15 @@
                   <button class="btn-view" @click="openDetail(r._id)">
                     View
                   </button>
-                  <button class="btn-del" @click="deleteReport(r._id)">
+                  <button
+                    class="btn-del"
+                    @click="
+                      openPinModal(
+                        r._id,
+                        `${r.apprehendedLastName}, ${r.apprehendedFirstName}`,
+                      )
+                    "
+                  >
                     ✕
                   </button>
                 </td>
@@ -254,6 +262,22 @@
             <div class="detail-label">Remarks</div>
             <div class="detail-val">{{ detailRecord.remarks || "—" }}</div>
           </div>
+          <div
+            class="detail-row"
+            v-if="detailRecord.geo && detailRecord.geo.latitude"
+          >
+            <div class="detail-label">Location</div>
+            <div class="detail-val">
+              <div class="geo-coords">
+                {{ detailRecord.geo.latitude.toFixed(6) }},
+                {{ detailRecord.geo.longitude.toFixed(6) }}
+                <span v-if="detailRecord.geo.accuracy">
+                  · ~{{ Math.round(detailRecord.geo.accuracy) }}m accuracy</span
+                >
+              </div>
+              <div ref="detailMapEl" class="detail-map"></div>
+            </div>
+          </div>
           <div class="detail-row">
             <div class="detail-label">Signature</div>
             <div class="detail-val">
@@ -360,6 +384,92 @@
     </div>
   </Teleport>
 
+  <!-- PIN confirmation modal -->
+  <Teleport to="body">
+    <Transition name="lightbox-fade">
+      <div
+        v-if="pinModal.visible"
+        class="modal-overlay"
+        @click.self="closePinModal"
+      >
+        <div class="modal modal-sm">
+          <div class="modal-header" style="background: var(--red)">
+            <h2>Confirm Deletion</h2>
+            <button class="modal-close" @click="closePinModal">×</button>
+          </div>
+          <div class="modal-body">
+            <p class="pin-warning">
+              This action is irreversible. Enter the supervisor PIN to proceed.
+            </p>
+            <div class="pin-record-info">
+              <strong>Record to delete:</strong>
+              <span>{{ pinModal.recordName }}</span>
+            </div>
+
+            <!-- PIN dot display -->
+            <div class="pin-dots-wrap">
+              <div class="pin-dots">
+                <span
+                  v-for="i in pinModal.maxLength"
+                  :key="i"
+                  :class="['pin-dot', i <= pinModal.pin.length ? 'filled' : '']"
+                ></span>
+              </div>
+              <p v-if="pinModal.error" class="pin-error">
+                {{ pinModal.error }}
+              </p>
+            </div>
+
+            <!-- On-screen numpad -->
+            <div class="numpad">
+              <button
+                v-for="key in [
+                  '1',
+                  '2',
+                  '3',
+                  '4',
+                  '5',
+                  '6',
+                  '7',
+                  '8',
+                  '9',
+                  '',
+                  '0',
+                  '⌫',
+                ]"
+                :key="key"
+                :class="[
+                  'numpad-key',
+                  key === '' ? 'numpad-empty' : '',
+                  key === '⌫' ? 'numpad-back' : '',
+                ]"
+                :disabled="key === '' || pinModal.loading"
+                @click="numpadPress(key)"
+                type="button"
+              >
+                {{ key }}
+              </button>
+            </div>
+
+            <div class="export-actions" style="margin-top: 16px">
+              <button class="btn btn-outline" @click="closePinModal">
+                Cancel
+              </button>
+              <button
+                class="btn-delete-confirm"
+                @click="confirmDelete"
+                :disabled="pinModal.loading || pinModal.pin.length === 0"
+              >
+                <span v-if="pinModal.loading">Deleting…</span>
+                <span v-else>Delete Record</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
   <!-- Lightbox -->
   <Teleport to="body">
     <Transition name="lightbox-fade">
@@ -381,7 +491,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, inject, onMounted } from "vue";
+import { ref, reactive, computed, inject, onMounted, nextTick } from "vue";
 import {
   BARANGAYS,
   OFFICERS,
@@ -418,6 +528,45 @@ let searchTimer = null;
 // ─── Detail modal ─────────────────────────────────────────────
 const detailModal = ref(false);
 const detailRecord = ref(null);
+const detailMapEl = ref(null);
+let detailMap = null;
+
+function initDetailMap(lat, lng) {
+  // Load Leaflet CSS
+  if (!document.getElementById("leaflet-css")) {
+    const link = document.createElement("link");
+    link.id = "leaflet-css";
+    link.rel = "stylesheet";
+    link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+    document.head.appendChild(link);
+  }
+  const loadLeaflet = () =>
+    new Promise((resolve) => {
+      if (window.L) {
+        resolve();
+        return;
+      }
+      const s = document.createElement("script");
+      s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      s.onload = resolve;
+      document.head.appendChild(s);
+    });
+  loadLeaflet().then(() => {
+    if (detailMap) {
+      detailMap.remove();
+      detailMap = null;
+    }
+    if (!detailMapEl.value) return;
+    detailMap = window.L.map(detailMapEl.value).setView([lat, lng], 17);
+    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap contributors",
+    }).addTo(detailMap);
+    window.L.marker([lat, lng])
+      .addTo(detailMap)
+      .bindPopup("Violation location")
+      .openPopup();
+  });
+}
 
 // ─── Export modal ─────────────────────────────────────────────
 const exportModal = ref(false);
@@ -528,24 +677,91 @@ function resetFilters() {
 async function openDetail(id) {
   detailRecord.value = null;
   detailModal.value = true;
+  if (detailMap) {
+    detailMap.remove();
+    detailMap = null;
+  }
   try {
     const res = await fetch("/api/reports/" + id);
     detailRecord.value = await res.json();
+    // Init map if geo data exists
+    if (detailRecord.value.geo?.latitude) {
+      await nextTick();
+      initDetailMap(
+        detailRecord.value.geo.latitude,
+        detailRecord.value.geo.longitude,
+      );
+    }
   } catch {
     showToast("Failed to load record.", true);
     detailModal.value = false;
   }
 }
 
-// ─── Delete ───────────────────────────────────────────────────
-async function deleteReport(id) {
-  if (!confirm("Delete this report? This cannot be undone.")) return;
+// ─── PIN delete modal ─────────────────────────────────────────
+const pinModal = reactive({
+  visible: false,
+  recordId: null,
+  recordName: "",
+  pin: "",
+  error: "",
+  loading: false,
+  maxLength: 4, // max digits allowed — matches whatever length your PIN is
+});
+
+function openPinModal(id, name) {
+  pinModal.visible = true;
+  pinModal.recordId = id;
+  pinModal.recordName = name;
+  pinModal.pin = "";
+  pinModal.error = "";
+  pinModal.loading = false;
+}
+
+function closePinModal() {
+  pinModal.visible = false;
+  pinModal.pin = "";
+  pinModal.error = "";
+  pinModal.loading = false;
+}
+
+function numpadPress(key) {
+  if (pinModal.loading) return;
+  if (key === "⌫") {
+    pinModal.pin = pinModal.pin.slice(0, -1);
+    pinModal.error = "";
+  } else if (pinModal.pin.length < pinModal.maxLength) {
+    pinModal.pin += key;
+    pinModal.error = "";
+  }
+}
+
+async function confirmDelete() {
+  if (!pinModal.pin) {
+    pinModal.error = "Please enter the PIN.";
+    return;
+  }
+  pinModal.loading = true;
+  pinModal.error = "";
   try {
-    await fetch("/api/reports/" + id, { method: "DELETE" });
-    showToast("Report deleted.");
-    loadReports(currentPage.value);
+    const res = await fetch("/api/reports/" + pinModal.recordId, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin: pinModal.pin }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast("Record deleted.");
+      closePinModal();
+      loadReports(currentPage.value);
+    } else {
+      pinModal.error = data.error || "Incorrect PIN.";
+      pinModal.loading = false;
+      pinModal.pin = "";
+    }
   } catch {
-    showToast("Failed to delete report.", true);
+    pinModal.error = "Network error. Please try again.";
+    pinModal.loading = false;
   }
 }
 
@@ -1076,6 +1292,157 @@ tr:hover td {
   .export-fields {
     grid-template-columns: 1fr;
   }
+}
+
+/* PIN delete modal */
+.pin-warning {
+  font-size: 0.85rem;
+  color: var(--red);
+  background: #fdecea;
+  border: 1px solid #f5c6c2;
+  border-radius: 5px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-weight: 500;
+}
+.pin-record-info {
+  font-size: 0.85rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.pin-record-info strong {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.pin-record-info span {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* PIN dots display */
+.pin-dots-wrap {
+  text-align: center;
+  margin-bottom: 16px;
+}
+.pin-dots {
+  display: inline-flex;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+.pin-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: white;
+  transition: all 0.15s;
+  display: inline-block;
+}
+.pin-dot.filled {
+  background: var(--red);
+  border-color: var(--red);
+  transform: scale(1.15);
+}
+.pin-error {
+  font-size: 0.8rem;
+  color: var(--red);
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+/* Numpad */
+.numpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 0 auto;
+  max-width: 240px;
+}
+.numpad-key {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  height: 56px;
+  font-family: "DM Sans", sans-serif;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.numpad-key:hover:not(:disabled):not(.numpad-empty) {
+  background: var(--green-pale);
+  border-color: var(--green-mid);
+  color: var(--green-dark);
+}
+.numpad-key:active:not(:disabled):not(.numpad-empty) {
+  transform: scale(0.93);
+  background: var(--green-mid);
+  color: white;
+}
+.numpad-empty {
+  visibility: hidden;
+  pointer-events: none;
+}
+.numpad-back {
+  color: var(--red);
+  font-size: 1rem;
+}
+.numpad-back:hover:not(:disabled) {
+  background: #fdecea !important;
+  border-color: var(--red) !important;
+  color: var(--red) !important;
+}
+.numpad-key:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-delete-confirm {
+  background: var(--red);
+  border: none;
+  border-radius: 5px;
+  padding: 10px 22px;
+  font-family: "DM Sans", sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-delete-confirm:hover:not(:disabled) {
+  background: #a93226;
+}
+.btn-delete-confirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Geo / map in detail modal */
+.geo-coords {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  font-family: monospace;
+}
+.detail-map {
+  width: 100%;
+  height: 200px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  z-index: 0;
 }
 
 /* Photo thumbnail — clickable */

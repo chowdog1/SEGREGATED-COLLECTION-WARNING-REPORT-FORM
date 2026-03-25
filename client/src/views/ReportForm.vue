@@ -215,6 +215,59 @@
             </div>
           </div>
 
+          <!-- SECTION 7: Location -->
+          <div class="form-section">
+            <div class="section-title">
+              <span class="sec-num">7</span> Location at Time of Submission
+            </div>
+            <div class="geo-status" :class="geoStatus">
+              <span class="geo-icon">
+                <template v-if="geoStatus === 'loading'">⏳</template>
+                <template v-else-if="geoStatus === 'success'">📍</template>
+                <template v-else-if="geoStatus === 'error'">⚠️</template>
+                <template v-else>📍</template>
+              </span>
+              <div class="geo-text">
+                <template v-if="geoStatus === 'loading'">
+                  <strong>Getting your location…</strong>
+                  <span>Please wait</span>
+                </template>
+                <template v-else-if="geoStatus === 'success'">
+                  <strong>Location captured</strong>
+                  <span
+                    >{{ form.geoLat.toFixed(6) }},
+                    {{ form.geoLng.toFixed(6) }} · Accuracy: ~{{
+                      Math.round(form.geoAcc)
+                    }}m</span
+                  >
+                </template>
+                <template v-else-if="geoStatus === 'error'">
+                  <strong>Location unavailable</strong>
+                  <span
+                    >{{ geoError }} — report will be submitted without
+                    location.</span
+                  >
+                </template>
+                <template v-else>
+                  <strong>Location not yet captured</strong>
+                </template>
+              </div>
+              <button
+                v-if="geoStatus === 'error' || geoStatus === 'idle'"
+                type="button"
+                class="btn-retry-geo"
+                @click="captureGeo"
+              >
+                Retry
+              </button>
+            </div>
+            <div
+              v-if="geoStatus === 'success'"
+              ref="mapEl"
+              class="geo-map"
+            ></div>
+          </div>
+
           <!-- Footer -->
           <div class="form-footer">
             <p>
@@ -242,16 +295,22 @@
 </template>
 
 <script setup>
-import { ref, reactive, inject } from "vue";
+import { ref, reactive, inject, onMounted, onUnmounted, nextTick } from "vue";
 import SignatureCanvas from "../components/SignatureCanvas.vue";
 import { BARANGAYS, OFFICERS, VIOLATIONS } from "../composables/constants.js";
 
 const showToast = inject("showToast");
 const sigCanvas = ref(null);
+const mapEl = ref(null);
 const submitting = ref(false);
 const formVisible = ref(true);
 const photoPreviews = ref([null, null]);
 const photoFiles = ref([null, null]);
+
+// Geo state
+const geoStatus = ref("idle"); // idle | loading | success | error
+const geoError = ref("");
+let leafletMap = null;
 
 function freshForm() {
   return {
@@ -272,11 +331,105 @@ function freshForm() {
     officers: [],
     remarks: "",
     signatureData: "",
+    geoLat: null,
+    geoLng: null,
+    geoAcc: null,
   };
 }
 
 const form = reactive(freshForm());
 
+// ─── Geolocation ──────────────────────────────────────────────
+async function captureGeo() {
+  if (!navigator.geolocation) {
+    geoStatus.value = "error";
+    geoError.value = "Geolocation is not supported by this browser";
+    return;
+  }
+
+  geoStatus.value = "loading";
+  geoError.value = "";
+
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      form.geoLat = pos.coords.latitude;
+      form.geoLng = pos.coords.longitude;
+      form.geoAcc = pos.coords.accuracy;
+      geoStatus.value = "success";
+
+      // Mount Leaflet map after DOM updates
+      await nextTick();
+      initMap(form.geoLat, form.geoLng);
+    },
+    (err) => {
+      geoStatus.value = "error";
+      const messages = {
+        1: "Location permission denied",
+        2: "Location unavailable",
+        3: "Location request timed out",
+      };
+      geoError.value = messages[err.code] || "Unknown error";
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+  );
+}
+
+function initMap(lat, lng) {
+  if (!mapEl.value) return;
+
+  // Load Leaflet CSS dynamically if not loaded yet
+  if (!document.getElementById("leaflet-css")) {
+    const link = document.createElement("link");
+    link.id = "leaflet-css";
+    link.rel = "stylesheet";
+    link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+    document.head.appendChild(link);
+  }
+
+  // Load Leaflet JS dynamically
+  const loadLeaflet = () =>
+    new Promise((resolve) => {
+      if (window.L) {
+        resolve();
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      script.onload = resolve;
+      document.head.appendChild(script);
+    });
+
+  loadLeaflet().then(() => {
+    if (leafletMap) {
+      leafletMap.remove();
+      leafletMap = null;
+    }
+
+    leafletMap = window.L.map(mapEl.value).setView([lat, lng], 17);
+
+    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap contributors",
+    }).addTo(leafletMap);
+
+    window.L.marker([lat, lng])
+      .addTo(leafletMap)
+      .bindPopup("Submission location")
+      .openPopup();
+  });
+}
+
+onMounted(() => {
+  captureGeo();
+});
+
+onUnmounted(() => {
+  if (leafletMap) {
+    leafletMap.remove();
+    leafletMap = null;
+  }
+});
+
+// ─── Photo preview ────────────────────────────────────────────
 function onPhotoChange(e, index) {
   const file = e.target.files[0];
   if (!file) return;
@@ -288,6 +441,7 @@ function onPhotoChange(e, index) {
   reader.readAsDataURL(file);
 }
 
+// ─── Submit ───────────────────────────────────────────────────
 async function submitForm() {
   const anyViol = Object.values(form.violations).some((v) => v);
   if (!anyViol) {
@@ -306,6 +460,9 @@ async function submitForm() {
   fd.append("remarks", form.remarks);
   fd.append("signatureData", form.signatureData);
   fd.append("otherText", form.otherText);
+  if (form.geoLat) fd.append("geoLat", form.geoLat);
+  if (form.geoLng) fd.append("geoLng", form.geoLng);
+  if (form.geoAcc) fd.append("geoAcc", form.geoAcc);
 
   Object.entries(form.violations).forEach(([key, val]) => {
     if (val) fd.append(`viol_${key}`, "on");
@@ -320,15 +477,20 @@ async function submitForm() {
     const data = await res.json();
     if (data.success) {
       showToast("Report submitted successfully!");
-      // Fade out the form, scroll to top, then reset
       formVisible.value = false;
       window.scrollTo({ top: 0, behavior: "smooth" });
+      if (leafletMap) {
+        leafletMap.remove();
+        leafletMap = null;
+      }
       setTimeout(() => {
         Object.assign(form, freshForm());
         photoPreviews.value = [null, null];
         photoFiles.value = [null, null];
         sigCanvas.value?.clear();
         formVisible.value = true;
+        // Re-capture location for next submission
+        captureGeo();
       }, 600);
     } else {
       showToast("Error: " + data.error, true);
@@ -568,6 +730,73 @@ async function submitForm() {
 .btn-submit:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+/* Geo location */
+.geo-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  margin-bottom: 12px;
+}
+.geo-status.loading {
+  border-color: #f0c040;
+  background: #fffdf0;
+}
+.geo-status.success {
+  border-color: var(--green-mid);
+  background: var(--green-pale);
+}
+.geo-status.error {
+  border-color: #f5c6c2;
+  background: #fdecea;
+}
+.geo-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+.geo-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+.geo-text strong {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+.geo-text span {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.btn-retry-geo {
+  background: none;
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-family: "DM Sans", sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+.btn-retry-geo:hover {
+  border-color: var(--green-mid);
+  color: var(--green-dark);
+}
+.geo-map {
+  width: 100%;
+  height: 220px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  z-index: 0;
 }
 
 /* Fade transition on submit */
