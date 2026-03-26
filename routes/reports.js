@@ -207,6 +207,73 @@ router.get("/api/reports", async (req, res) => {
   }
 });
 
+// GET dashboard stats
+router.get("/api/dashboard", async (req, res) => {
+  try {
+    const now = new Date();
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+
+    const [total, today, thisMonth, byBarangay, byViolation, recentReports] =
+      await Promise.all([
+        // Total all time
+        WarningReport.countDocuments(),
+
+        // Today
+        WarningReport.countDocuments({ dateIssued: { $gte: startOfToday } }),
+
+        // This month
+        WarningReport.countDocuments({ dateIssued: { $gte: startOfMonth } }),
+
+        // Per barangay
+        WarningReport.aggregate([
+          { $group: { _id: "$barangay", count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+        ]),
+
+        // Per violation type
+        WarningReport.aggregate([
+          {
+            $group: {
+              _id: null,
+              co3504: { $sum: { $cond: ["$violations.co3504", 1, 0] } },
+              co911: { $sum: { $cond: ["$violations.co911", 1, 0] } },
+              co1424ab: { $sum: { $cond: ["$violations.co1424ab", 1, 0] } },
+              co1424rest: { $sum: { $cond: ["$violations.co1424rest", 1, 0] } },
+              co1011: { $sum: { $cond: ["$violations.co1011", 1, 0] } },
+              other: { $sum: { $cond: ["$violations.other", 1, 0] } },
+            },
+          },
+        ]),
+
+        // 5 most recent reports
+        WarningReport.find(
+          {},
+          {
+            signature: 0,
+            photos: 0,
+          },
+        )
+          .sort({ dateIssued: -1 })
+          .limit(5)
+          .lean(),
+      ]);
+
+    res.json({
+      total,
+      today,
+      thisMonth,
+      byBarangay,
+      byViolation: byViolation[0] || {},
+      recentReports,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET single report
 router.get("/api/reports/:id", async (req, res) => {
   try {
@@ -225,20 +292,16 @@ router.delete("/api/reports/:id", async (req, res) => {
     const correctPin = process.env.DELETE_PIN;
 
     if (!correctPin) {
-      return res
-        .status(500)
-        .json({
-          success: false,
-          error: "DELETE_PIN is not configured in .env",
-        });
+      return res.status(500).json({
+        success: false,
+        error: "DELETE_PIN is not configured in .env",
+      });
     }
     if (!pin || pin.toString() !== correctPin.toString()) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          error: "Incorrect PIN. Deletion not authorized.",
-        });
+      return res.status(403).json({
+        success: false,
+        error: "Incorrect PIN. Deletion not authorized.",
+      });
     }
 
     await WarningReport.findByIdAndDelete(req.params.id);

@@ -1,296 +1,284 @@
 <template>
   <div class="main-wrap">
-    <Transition name="form-fade">
-      <form v-if="formVisible" @submit.prevent="submitForm">
-        <div class="form-card">
-          <!-- SECTION 1: Violation Details -->
-          <div class="form-section">
-            <div class="section-title">
-              <span class="sec-num">1</span> Violation Details
-            </div>
-            <div class="form-row" style="grid-template-columns: 220px 1fr">
-              <div class="form-group">
-                <label class="field-label" for="dateIssued"
-                  >Date Issued <span class="req">*</span></label
-                >
-                <input
-                  type="date"
-                  id="dateIssued"
-                  v-model="form.dateIssued"
-                  required
-                />
-              </div>
-            </div>
-
-            <label
-              class="field-label"
-              style="margin-bottom: 10px; display: block"
-            >
-              Violations <span class="req">*</span>
-            </label>
-            <div class="violations-grid">
-              <label
-                v-for="v in VIOLATIONS"
-                :key="v.key"
-                :class="['viol-item', form.violations[v.key] ? 'checked' : '']"
-              >
-                <input type="checkbox" v-model="form.violations[v.key]" />
-                <div class="viol-label">
-                  <span class="viol-code">{{ v.code }}</span>
-                  <span class="viol-desc">{{ v.desc }}</span>
-                </div>
-              </label>
-              <label
-                :class="['viol-item', form.violations.other ? 'checked' : '']"
-              >
-                <input type="checkbox" v-model="form.violations.other" />
-                <div class="viol-label">
-                  <span class="viol-code">Other</span>
-                  <span class="viol-desc">Specify below</span>
-                </div>
-              </label>
-            </div>
-            <div v-if="form.violations.other" class="other-text-wrap">
-              <div class="form-group">
-                <label class="field-label" for="otherText"
-                  >Please specify other violation</label
-                >
-                <input
-                  type="text"
-                  id="otherText"
-                  :value="form.otherText"
-                  @input="form.otherText = $event.target.value.toUpperCase()"
-                  placeholder="Describe the violation…"
-                />
-              </div>
-            </div>
+    <form
+      @submit.prevent="submitForm"
+      :class="{ 'form-submitting': submitting }"
+    >
+      <div class="form-card">
+        <!-- SECTION 1: Violation Details -->
+        <div class="form-section">
+          <div class="section-title">
+            <span class="sec-num">1</span> Violation Details
           </div>
-
-          <!-- SECTION 2: Person Apprehended -->
-          <div class="form-section">
-            <div class="section-title">
-              <span class="sec-num">2</span> Person Apprehended
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="field-label" for="firstName"
-                  >First Name <span class="req">*</span></label
-                >
-                <input
-                  type="text"
-                  id="firstName"
-                  :value="form.apprehendedFirstName"
-                  @input="
-                    form.apprehendedFirstName =
-                      $event.target.value.toUpperCase()
-                  "
-                  required
-                  placeholder="First name"
-                />
-              </div>
-              <div class="form-group">
-                <label class="field-label" for="lastName"
-                  >Last Name <span class="req">*</span></label
-                >
-                <input
-                  type="text"
-                  id="lastName"
-                  :value="form.apprehendedLastName"
-                  @input="
-                    form.apprehendedLastName = $event.target.value.toUpperCase()
-                  "
-                  required
-                  placeholder="Last name"
-                />
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="field-label" for="address"
-                  >Address <span class="req">*</span></label
-                >
-                <input
-                  type="text"
-                  id="address"
-                  :value="form.address"
-                  @input="form.address = $event.target.value.toUpperCase()"
-                  required
-                  placeholder="Street address, unit, etc."
-                />
-              </div>
-              <div class="form-group">
-                <label class="field-label" for="barangay"
-                  >Barangay <span class="req">*</span></label
-                >
-                <select id="barangay" v-model="form.barangay" required>
-                  <option value="">— Select Barangay —</option>
-                  <option v-for="b in BARANGAYS" :key="b" :value="b">
-                    {{ b }}
-                  </option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <!-- SECTION 3: Officers -->
-          <div class="form-section">
-            <div class="section-title">
-              <span class="sec-num">3</span> Environmental Enforcers / Officers
-            </div>
-            <div class="officers-grid">
-              <label
-                v-for="officer in OFFICERS"
-                :key="officer"
-                :class="[
-                  'officer-item',
-                  form.officers.includes(officer) ? 'checked' : '',
-                ]"
-              >
-                <input
-                  type="checkbox"
-                  :value="officer"
-                  v-model="form.officers"
-                />
-                <span>{{ officer }}</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- SECTION 4: Remarks -->
-          <div class="form-section">
-            <div class="section-title">
-              <span class="sec-num">4</span> Remarks
-            </div>
+          <div class="form-row" style="grid-template-columns: 220px 1fr">
             <div class="form-group">
-              <label class="field-label" for="remarks">Remarks / Notes</label>
-              <textarea
-                id="remarks"
-                :value="form.remarks"
-                @input="form.remarks = $event.target.value.toUpperCase()"
-                placeholder="Additional notes, circumstances, etc."
+              <label class="field-label" for="dateIssued"
+                >Date Issued <span class="req">*</span></label
+              >
+              <input
+                type="date"
+                id="dateIssued"
+                v-model="form.dateIssued"
+                required
               />
             </div>
           </div>
 
-          <!-- SECTION 5: Signature -->
-          <div class="form-section">
-            <div class="section-title">
-              <span class="sec-num">5</span> Signature of Apprehended Person
-            </div>
-            <SignatureCanvas
-              @update="form.signatureData = $event"
-              ref="sigCanvas"
-            />
-          </div>
-
-          <!-- SECTION 6: Photos -->
-          <div class="form-section">
-            <div class="section-title">
-              <span class="sec-num">6</span> Photo Evidence
-            </div>
-            <div class="photo-upload-row">
-              <div
-                v-for="n in [0, 1]"
-                :key="n"
-                :class="['photo-slot', photoPreviews[n] ? 'has-preview' : '']"
-              >
-                <div v-if="!photoPreviews[n]">
-                  <div class="slot-icon">📷</div>
-                  <div class="slot-label">
-                    Photo {{ n + 1 }} — Tap to upload
-                  </div>
-                </div>
-                <img
-                  v-else
-                  :src="photoPreviews[n]"
-                  class="photo-preview"
-                  :alt="`Photo ${n + 1} preview`"
-                />
-                <input
-                  type="file"
-                  accept="image/*"
-                  @change="onPhotoChange($event, n)"
-                />
+          <label
+            class="field-label"
+            style="margin-bottom: 10px; display: block"
+          >
+            Violations <span class="req">*</span>
+          </label>
+          <div class="violations-grid">
+            <label
+              v-for="v in VIOLATIONS"
+              :key="v.key"
+              :class="['viol-item', form.violations[v.key] ? 'checked' : '']"
+            >
+              <input type="checkbox" v-model="form.violations[v.key]" />
+              <div class="viol-label">
+                <span class="viol-code">{{ v.code }}</span>
+                <span class="viol-desc">{{ v.desc }}</span>
               </div>
-            </div>
-          </div>
-
-          <!-- SECTION 7: Location -->
-          <div class="form-section">
-            <div class="section-title">
-              <span class="sec-num">7</span> Location at Time of Submission
-            </div>
-            <div class="geo-status" :class="geoStatus">
-              <span class="geo-icon">
-                <template v-if="geoStatus === 'loading'">⏳</template>
-                <template v-else-if="geoStatus === 'success'">📍</template>
-                <template v-else-if="geoStatus === 'error'">⚠️</template>
-                <template v-else>📍</template>
-              </span>
-              <div class="geo-text">
-                <template v-if="geoStatus === 'loading'">
-                  <strong>Getting your location…</strong>
-                  <span>Please wait</span>
-                </template>
-                <template v-else-if="geoStatus === 'success'">
-                  <strong>Location captured</strong>
-                  <span
-                    >{{ form.geoLat.toFixed(6) }},
-                    {{ form.geoLng.toFixed(6) }} · Accuracy: ~{{
-                      Math.round(form.geoAcc)
-                    }}m</span
-                  >
-                </template>
-                <template v-else-if="geoStatus === 'error'">
-                  <strong>Location unavailable</strong>
-                  <span
-                    >{{ geoError }} — report will be submitted without
-                    location.</span
-                  >
-                </template>
-                <template v-else>
-                  <strong>Location not yet captured</strong>
-                </template>
+            </label>
+            <label
+              :class="['viol-item', form.violations.other ? 'checked' : '']"
+            >
+              <input type="checkbox" v-model="form.violations.other" />
+              <div class="viol-label">
+                <span class="viol-code">Other</span>
+                <span class="viol-desc">Specify below</span>
               </div>
-              <button
-                v-if="geoStatus === 'error' || geoStatus === 'idle'"
-                type="button"
-                class="btn-retry-geo"
-                @click="captureGeo"
-              >
-                Retry
-              </button>
-            </div>
-            <div
-              v-if="geoStatus === 'success'"
-              ref="mapEl"
-              class="geo-map"
-            ></div>
+            </label>
           </div>
-
-          <!-- Footer -->
-          <div class="form-footer">
-            <p>
-              All fields marked <strong style="color: var(--red)">*</strong> are
-              required.<br />Submitted reports are stored securely.
-            </p>
-            <button type="submit" class="btn-submit" :disabled="submitting">
-              <span
-                v-if="submitting"
-                class="spinner-sm"
-                style="
-                  display: inline-block;
-                  vertical-align: middle;
-                  margin-right: 8px;
-                  border-top-color: white;
-                "
-              ></span>
-              {{ submitting ? "Submitting…" : "Submit Warning Report" }}
-            </button>
+          <div v-if="form.violations.other" class="other-text-wrap">
+            <div class="form-group">
+              <label class="field-label" for="otherText"
+                >Please specify other violation</label
+              >
+              <input
+                type="text"
+                id="otherText"
+                :value="form.otherText"
+                @input="form.otherText = $event.target.value.toUpperCase()"
+                placeholder="Describe the violation…"
+              />
+            </div>
           </div>
         </div>
-      </form>
-    </Transition>
+
+        <!-- SECTION 2: Person Apprehended -->
+        <div class="form-section">
+          <div class="section-title">
+            <span class="sec-num">2</span> Person Apprehended
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="field-label" for="firstName"
+                >First Name <span class="req">*</span></label
+              >
+              <input
+                type="text"
+                id="firstName"
+                :value="form.apprehendedFirstName"
+                @input="
+                  form.apprehendedFirstName = $event.target.value.toUpperCase()
+                "
+                required
+                placeholder="First name"
+              />
+            </div>
+            <div class="form-group">
+              <label class="field-label" for="lastName"
+                >Last Name <span class="req">*</span></label
+              >
+              <input
+                type="text"
+                id="lastName"
+                :value="form.apprehendedLastName"
+                @input="
+                  form.apprehendedLastName = $event.target.value.toUpperCase()
+                "
+                required
+                placeholder="Last name"
+              />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="field-label" for="address"
+                >Address <span class="req">*</span></label
+              >
+              <input
+                type="text"
+                id="address"
+                :value="form.address"
+                @input="form.address = $event.target.value.toUpperCase()"
+                required
+                placeholder="Street address, unit, etc."
+              />
+            </div>
+            <div class="form-group">
+              <label class="field-label" for="barangay"
+                >Barangay <span class="req">*</span></label
+              >
+              <select id="barangay" v-model="form.barangay" required>
+                <option value="">— Select Barangay —</option>
+                <option v-for="b in BARANGAYS" :key="b" :value="b">
+                  {{ b }}
+                </option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION 3: Officers -->
+        <div class="form-section">
+          <div class="section-title">
+            <span class="sec-num">3</span> Environmental Enforcers / Officers
+          </div>
+          <div class="officers-grid">
+            <label
+              v-for="officer in OFFICERS"
+              :key="officer"
+              :class="[
+                'officer-item',
+                form.officers.includes(officer) ? 'checked' : '',
+              ]"
+            >
+              <input type="checkbox" :value="officer" v-model="form.officers" />
+              <span>{{ officer }}</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- SECTION 4: Remarks -->
+        <div class="form-section">
+          <div class="section-title">
+            <span class="sec-num">4</span> Remarks
+          </div>
+          <div class="form-group">
+            <label class="field-label" for="remarks">Remarks / Notes</label>
+            <textarea
+              id="remarks"
+              :value="form.remarks"
+              @input="form.remarks = $event.target.value.toUpperCase()"
+              placeholder="Additional notes, circumstances, etc."
+            />
+          </div>
+        </div>
+
+        <!-- SECTION 5: Signature -->
+        <div class="form-section">
+          <div class="section-title">
+            <span class="sec-num">5</span> Signature of Apprehended Person
+          </div>
+          <SignatureCanvas
+            @update="form.signatureData = $event"
+            ref="sigCanvas"
+          />
+        </div>
+
+        <!-- SECTION 6: Photos -->
+        <div class="form-section">
+          <div class="section-title">
+            <span class="sec-num">6</span> Photo Evidence
+          </div>
+          <div class="photo-upload-row">
+            <div
+              v-for="n in [0, 1]"
+              :key="n"
+              :class="['photo-slot', photoPreviews[n] ? 'has-preview' : '']"
+            >
+              <div v-if="!photoPreviews[n]">
+                <div class="slot-icon">📷</div>
+                <div class="slot-label">Photo {{ n + 1 }} — Tap to upload</div>
+              </div>
+              <img
+                v-else
+                :src="photoPreviews[n]"
+                class="photo-preview"
+                :alt="`Photo ${n + 1} preview`"
+              />
+              <input
+                type="file"
+                accept="image/*"
+                @change="onPhotoChange($event, n)"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION 7: Location -->
+        <div class="form-section">
+          <div class="section-title">
+            <span class="sec-num">7</span> Location at Time of Submission
+          </div>
+          <div class="geo-status" :class="geoStatus">
+            <span class="geo-icon">
+              <template v-if="geoStatus === 'loading'">⏳</template>
+              <template v-else-if="geoStatus === 'success'">📍</template>
+              <template v-else-if="geoStatus === 'error'">⚠️</template>
+              <template v-else>📍</template>
+            </span>
+            <div class="geo-text">
+              <template v-if="geoStatus === 'loading'">
+                <strong>Getting your location…</strong>
+                <span>Please wait</span>
+              </template>
+              <template v-else-if="geoStatus === 'success'">
+                <strong>Location captured</strong>
+                <span
+                  >{{ form.geoLat.toFixed(6) }}, {{ form.geoLng.toFixed(6) }} ·
+                  Accuracy: ~{{ Math.round(form.geoAcc) }}m</span
+                >
+              </template>
+              <template v-else-if="geoStatus === 'error'">
+                <strong>Location unavailable</strong>
+                <span
+                  >{{ geoError }} — report will be submitted without
+                  location.</span
+                >
+              </template>
+              <template v-else>
+                <strong>Location not yet captured</strong>
+              </template>
+            </div>
+            <button
+              v-if="geoStatus === 'error' || geoStatus === 'idle'"
+              type="button"
+              class="btn-retry-geo"
+              @click="captureGeo"
+            >
+              Retry
+            </button>
+          </div>
+          <div v-if="geoStatus === 'success'" ref="mapEl" class="geo-map"></div>
+        </div>
+
+        <!-- Footer -->
+        <div class="form-footer">
+          <p>
+            All fields marked <strong style="color: var(--red)">*</strong> are
+            required.<br />Submitted reports are stored securely.
+          </p>
+          <button type="submit" class="btn-submit" :disabled="submitting">
+            <span
+              v-if="submitting"
+              class="spinner-sm"
+              style="
+                display: inline-block;
+                vertical-align: middle;
+                margin-right: 8px;
+                border-top-color: white;
+              "
+            ></span>
+            {{ submitting ? "Submitting…" : "Submit Warning Report" }}
+          </button>
+        </div>
+      </div>
+    </form>
   </div>
 </template>
 
@@ -298,12 +286,16 @@
 import { ref, reactive, inject, onMounted, onUnmounted, nextTick } from "vue";
 import SignatureCanvas from "../components/SignatureCanvas.vue";
 import { BARANGAYS, OFFICERS, VIOLATIONS } from "../composables/constants.js";
+import {
+  queueReport,
+  getPendingCount,
+} from "../composables/useOfflineQueue.js";
 
 const showToast = inject("showToast");
+const refreshPendingCount = inject("refreshPendingCount");
 const sigCanvas = ref(null);
 const mapEl = ref(null);
 const submitting = ref(false);
-const formVisible = ref(true);
 const photoPreviews = ref([null, null]);
 const photoFiles = ref([null, null]);
 
@@ -473,25 +465,22 @@ async function submitForm() {
   });
 
   try {
+    // If offline, queue the report and notify
+    if (!navigator.onLine) {
+      await queueReport(fd);
+      await refreshPendingCount();
+      showToast(
+        "Offline — report saved. Will submit when connection is restored.",
+      );
+      resetForm();
+      return;
+    }
+
     const res = await fetch("/api/reports", { method: "POST", body: fd });
     const data = await res.json();
     if (data.success) {
       showToast("Report submitted successfully!");
-      formVisible.value = false;
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      if (leafletMap) {
-        leafletMap.remove();
-        leafletMap = null;
-      }
-      setTimeout(() => {
-        Object.assign(form, freshForm());
-        photoPreviews.value = [null, null];
-        photoFiles.value = [null, null];
-        sigCanvas.value?.clear();
-        formVisible.value = true;
-        // Re-capture location for next submission
-        captureGeo();
-      }, 600);
+      resetForm();
     } else {
       showToast("Error: " + data.error, true);
     }
@@ -500,6 +489,21 @@ async function submitForm() {
   } finally {
     submitting.value = false;
   }
+}
+
+function resetForm() {
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  if (leafletMap) {
+    leafletMap.remove();
+    leafletMap = null;
+  }
+  setTimeout(() => {
+    Object.assign(form, freshForm());
+    photoPreviews.value = [null, null];
+    photoFiles.value = [null, null];
+    sigCanvas.value?.clear();
+    captureGeo();
+  }, 400);
 }
 </script>
 
@@ -799,24 +803,11 @@ async function submitForm() {
   z-index: 0;
 }
 
-/* Fade transition on submit */
-.form-fade-enter-active {
-  transition:
-    opacity 0.4s ease,
-    transform 0.4s ease;
-}
-.form-fade-leave-active {
-  transition:
-    opacity 0.3s ease,
-    transform 0.3s ease;
-}
-.form-fade-enter-from {
-  opacity: 0;
-  transform: translateY(12px);
-}
-.form-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
+/* Subtle pulse when submitting */
+.form-submitting .form-card {
+  opacity: 0.6;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
 }
 
 @media (max-width: 600px) {
