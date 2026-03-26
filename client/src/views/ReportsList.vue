@@ -207,186 +207,191 @@
 
   <!-- Detail modal -->
   <Teleport to="body">
-    <div
-      v-if="detailModal"
-      class="modal-overlay"
-      @click.self="detailModal = false"
-    >
-      <div class="modal">
-        <div class="modal-header">
-          <h2>Warning Report Details</h2>
-          <button class="modal-close" @click="detailModal = false">×</button>
-        </div>
-        <div class="modal-body" v-if="detailRecord">
-          <div class="detail-row">
-            <div class="detail-label">Date Issued</div>
-            <div class="detail-val">
-              <strong>{{ formatDateLong(detailRecord.dateIssued) }}</strong>
+    <Transition name="modal">
+      <div
+        v-if="detailModal"
+        class="modal-overlay"
+        @click.self="detailModal = false"
+      >
+        <div class="modal">
+          <div class="modal-header">
+            <h2>Warning Report Details</h2>
+            <button class="modal-close" @click="detailModal = false">×</button>
+          </div>
+          <div class="modal-body" v-if="detailRecord">
+            <div class="detail-row">
+              <div class="detail-label">Date Issued</div>
+              <div class="detail-val">
+                <strong>{{ formatDateLong(detailRecord.dateIssued) }}</strong>
+              </div>
             </div>
-          </div>
-          <div class="detail-row">
-            <div class="detail-label">Violations</div>
-            <div class="detail-val">
-              <span
-                v-for="v in getViolationsFull(detailRecord)"
-                :key="v"
-                class="badge"
-                >{{ v }}</span
-              >
-            </div>
-          </div>
-          <div class="detail-row">
-            <div class="detail-label">Apprehended</div>
-            <div class="detail-val">
-              <strong
-                >{{ detailRecord.apprehendedLastName }},
-                {{ detailRecord.apprehendedFirstName }}</strong
-              >
-            </div>
-          </div>
-          <div class="detail-row">
-            <div class="detail-label">Address</div>
-            <div class="detail-val">{{ detailRecord.address }}</div>
-          </div>
-          <div class="detail-row">
-            <div class="detail-label">Barangay</div>
-            <div class="detail-val">{{ detailRecord.barangay }}</div>
-          </div>
-          <div class="detail-row">
-            <div class="detail-label">Officers</div>
-            <div class="detail-val">
-              {{ (detailRecord.officers || []).join(", ") || "—" }}
-            </div>
-          </div>
-          <div class="detail-row">
-            <div class="detail-label">Remarks</div>
-            <div class="detail-val">{{ detailRecord.remarks || "—" }}</div>
-          </div>
-          <div
-            class="detail-row"
-            v-if="detailRecord.geo && detailRecord.geo.latitude"
-          >
-            <div class="detail-label">Location</div>
-            <div class="detail-val">
-              <div class="geo-coords">
-                {{ detailRecord.geo.latitude.toFixed(6) }},
-                {{ detailRecord.geo.longitude.toFixed(6) }}
-                <span v-if="detailRecord.geo.accuracy">
-                  · ~{{ Math.round(detailRecord.geo.accuracy) }}m accuracy</span
+            <div class="detail-row">
+              <div class="detail-label">Violations</div>
+              <div class="detail-val">
+                <span
+                  v-for="v in getViolationsFull(detailRecord)"
+                  :key="v"
+                  class="badge"
+                  >{{ v }}</span
                 >
               </div>
-              <div ref="detailMapEl" class="detail-map"></div>
             </div>
-          </div>
-          <div class="detail-row">
-            <div class="detail-label">Signature</div>
-            <div class="detail-val">
-              <img
-                v-if="detailRecord.signature"
-                :src="detailRecord.signature"
-                class="sig-img"
-                alt="Signature"
-              />
-              <em v-else style="color: var(--text-muted)"
-                >No signature captured</em
-              >
-            </div>
-          </div>
-          <div class="detail-row">
-            <div class="detail-label">Photos</div>
-            <div class="detail-val">
-              <div
-                v-if="detailRecord.photos && detailRecord.photos.length"
-                class="photo-grid"
-              >
-                <img
-                  v-for="(p, i) in detailRecord.photos"
-                  :key="i"
-                  :src="p"
-                  alt="Photo evidence"
-                  class="photo-thumb"
-                  @click="openLightbox(p)"
-                />
+            <div class="detail-row">
+              <div class="detail-label">Apprehended</div>
+              <div class="detail-val">
+                <strong
+                  >{{ detailRecord.apprehendedLastName }},
+                  {{ detailRecord.apprehendedFirstName }}</strong
+                >
               </div>
-              <em v-else style="color: var(--text-muted)">No photos</em>
+            </div>
+            <div class="detail-row">
+              <div class="detail-label">Address</div>
+              <div class="detail-val">{{ detailRecord.address }}</div>
+            </div>
+            <div class="detail-row">
+              <div class="detail-label">Barangay</div>
+              <div class="detail-val">{{ detailRecord.barangay }}</div>
+            </div>
+            <div class="detail-row">
+              <div class="detail-label">Officers</div>
+              <div class="detail-val">
+                {{ (detailRecord.officers || []).join(", ") || "—" }}
+              </div>
+            </div>
+            <div class="detail-row">
+              <div class="detail-label">Remarks</div>
+              <div class="detail-val">{{ detailRecord.remarks || "—" }}</div>
+            </div>
+            <div
+              class="detail-row"
+              v-if="detailRecord.geo && detailRecord.geo.latitude"
+            >
+              <div class="detail-label">Location</div>
+              <div class="detail-val">
+                <div class="geo-coords">
+                  {{ detailRecord.geo.latitude.toFixed(6) }},
+                  {{ detailRecord.geo.longitude.toFixed(6) }}
+                  <span v-if="detailRecord.geo.accuracy">
+                    · ~{{ Math.round(detailRecord.geo.accuracy) }}m
+                    accuracy</span
+                  >
+                </div>
+                <div ref="detailMapEl" class="detail-map"></div>
+              </div>
+            </div>
+            <div class="detail-row">
+              <div class="detail-label">Signature</div>
+              <div class="detail-val">
+                <img
+                  v-if="detailRecord.signature"
+                  :src="detailRecord.signature"
+                  class="sig-img"
+                  alt="Signature"
+                />
+                <em v-else style="color: var(--text-muted)"
+                  >No signature captured</em
+                >
+              </div>
+            </div>
+            <div class="detail-row">
+              <div class="detail-label">Photos</div>
+              <div class="detail-val">
+                <div
+                  v-if="detailRecord.photos && detailRecord.photos.length"
+                  class="photo-grid"
+                >
+                  <img
+                    v-for="(p, i) in detailRecord.photos"
+                    :key="i"
+                    :src="p"
+                    alt="Photo evidence"
+                    class="photo-thumb"
+                    @click="openLightbox(p)"
+                  />
+                </div>
+                <em v-else style="color: var(--text-muted)">No photos</em>
+              </div>
             </div>
           </div>
-        </div>
-        <div
-          v-else
-          class="modal-body"
-          style="text-align: center; padding: 40px"
-        >
-          <div class="spinner-sm"></div>
+          <div
+            v-else
+            class="modal-body"
+            style="text-align: center; padding: 40px"
+          >
+            <div class="spinner-sm"></div>
+          </div>
         </div>
       </div>
-    </div>
+    </Transition>
   </Teleport>
 
   <!-- Export modal -->
   <Teleport to="body">
-    <div
-      v-if="exportModal"
-      class="modal-overlay"
-      @click.self="exportModal = false"
-    >
-      <div class="modal modal-sm">
-        <div class="modal-header">
-          <h2>Export to Excel</h2>
-          <button class="modal-close" @click="exportModal = false">×</button>
-        </div>
-        <div class="modal-body">
-          <p
-            style="
-              font-size: 0.88rem;
-              color: var(--text-muted);
-              margin-bottom: 18px;
-            "
-          >
-            Select the date range for the records you want to export. The file
-            will include all fields, signatures, and photos.
-          </p>
-          <div class="export-fields">
-            <div class="form-group-ex">
-              <label class="ex-label">From</label>
-              <input type="date" v-model="exportFrom" class="ex-input" />
-            </div>
-            <div class="form-group-ex">
-              <label class="ex-label">To</label>
-              <input type="date" v-model="exportTo" class="ex-input" />
-            </div>
+    <Transition name="modal">
+      <div
+        v-if="exportModal"
+        class="modal-overlay"
+        @click.self="exportModal = false"
+      >
+        <div class="modal modal-sm">
+          <div class="modal-header">
+            <h2>Export to Excel</h2>
+            <button class="modal-close" @click="exportModal = false">×</button>
           </div>
-          <div class="export-presets">
-            <span class="preset-label">Quick select:</span>
-            <button class="preset-btn" @click="setPreset('today')">
-              Today
-            </button>
-            <button class="preset-btn" @click="setPreset('week')">
-              This Week
-            </button>
-            <button class="preset-btn" @click="setPreset('month')">
-              This Month
-            </button>
-            <button class="preset-btn" @click="setPreset('all')">
-              All Time
-            </button>
-          </div>
-          <div class="export-actions">
-            <button class="btn btn-outline" @click="exportModal = false">
-              Cancel
-            </button>
-            <button class="btn btn-primary" @click="doExport">
-              Download Excel
-            </button>
+          <div class="modal-body">
+            <p
+              style="
+                font-size: 0.88rem;
+                color: var(--text-muted);
+                margin-bottom: 18px;
+              "
+            >
+              Select the date range for the records you want to export. The file
+              will include all fields, signatures, and photos.
+            </p>
+            <div class="export-fields">
+              <div class="form-group-ex">
+                <label class="ex-label">From</label>
+                <input type="date" v-model="exportFrom" class="ex-input" />
+              </div>
+              <div class="form-group-ex">
+                <label class="ex-label">To</label>
+                <input type="date" v-model="exportTo" class="ex-input" />
+              </div>
+            </div>
+            <div class="export-presets">
+              <span class="preset-label">Quick select:</span>
+              <button class="preset-btn" @click="setPreset('today')">
+                Today
+              </button>
+              <button class="preset-btn" @click="setPreset('week')">
+                This Week
+              </button>
+              <button class="preset-btn" @click="setPreset('month')">
+                This Month
+              </button>
+              <button class="preset-btn" @click="setPreset('all')">
+                All Time
+              </button>
+            </div>
+            <div class="export-actions">
+              <button class="btn btn-outline" @click="exportModal = false">
+                Cancel
+              </button>
+              <button class="btn btn-primary" @click="doExport">
+                Download Excel
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </Transition>
   </Teleport>
 
   <!-- PIN confirmation modal -->
   <Teleport to="body">
-    <Transition name="lightbox-fade">
+    <Transition name="modal">
       <div
         v-if="pinModal.visible"
         class="modal-overlay"
@@ -397,7 +402,7 @@
             <h2>Confirm Deletion</h2>
             <button class="modal-close" @click="closePinModal">×</button>
           </div>
-          <div class="modal-body">
+          <div class="modal-body pin-modal-body">
             <p class="pin-warning">
               This action is irreversible. Enter the supervisor PIN to proceed.
             </p>
@@ -410,17 +415,22 @@
             <div class="pin-dots-wrap">
               <div class="pin-dots">
                 <span
-                  v-for="i in pinModal.maxLength"
+                  v-for="i in 4"
                   :key="i"
-                  :class="['pin-dot', i <= pinModal.pin.length ? 'filled' : '']"
+                  :class="[
+                    'pin-dot',
+                    i <= pinModal.pin.length ? 'filled' : '',
+                    pinModal.shake ? 'shake' : '',
+                  ]"
                 ></span>
               </div>
               <p v-if="pinModal.error" class="pin-error">
                 {{ pinModal.error }}
               </p>
+              <p v-if="pinModal.loading" class="pin-checking">Verifying…</p>
             </div>
 
-            <!-- On-screen numpad -->
+            <!-- On-screen numpad — no backspace, phone style -->
             <div class="numpad">
               <button
                 v-for="key in [
@@ -435,33 +445,25 @@
                   '9',
                   '',
                   '0',
-                  '⌫',
+                  '',
                 ]"
-                :key="key"
-                :class="[
-                  'numpad-key',
-                  key === '' ? 'numpad-empty' : '',
-                  key === '⌫' ? 'numpad-back' : '',
-                ]"
+                :key="key + Math.random()"
+                :class="['numpad-key', key === '' ? 'numpad-empty' : '']"
                 :disabled="key === '' || pinModal.loading"
-                @click="numpadPress(key)"
+                @click="key !== '' && numpadPress(key)"
                 type="button"
               >
                 {{ key }}
               </button>
             </div>
 
-            <div class="export-actions" style="margin-top: 16px">
-              <button class="btn btn-outline" @click="closePinModal">
-                Cancel
-              </button>
+            <div style="text-align: center; margin-top: 14px">
               <button
-                class="btn-delete-confirm"
-                @click="confirmDelete"
-                :disabled="pinModal.loading || pinModal.pin.length === 0"
+                class="btn-pin-cancel"
+                @click="closePinModal"
+                type="button"
               >
-                <span v-if="pinModal.loading">Deleting…</span>
-                <span v-else>Delete Record</span>
+                Cancel
               </button>
             </div>
           </div>
@@ -491,7 +493,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, inject, onMounted, nextTick } from "vue";
+import {
+  ref,
+  reactive,
+  computed,
+  inject,
+  onMounted,
+  onUnmounted,
+  nextTick,
+} from "vue";
 import {
   BARANGAYS,
   OFFICERS,
@@ -706,7 +716,7 @@ const pinModal = reactive({
   pin: "",
   error: "",
   loading: false,
-  maxLength: 4, // max digits allowed — matches whatever length your PIN is
+  shake: false,
 });
 
 function openPinModal(id, name) {
@@ -716,6 +726,7 @@ function openPinModal(id, name) {
   pinModal.pin = "";
   pinModal.error = "";
   pinModal.loading = false;
+  pinModal.shake = false;
 }
 
 function closePinModal() {
@@ -723,24 +734,22 @@ function closePinModal() {
   pinModal.pin = "";
   pinModal.error = "";
   pinModal.loading = false;
+  pinModal.shake = false;
 }
 
-function numpadPress(key) {
+async function numpadPress(key) {
   if (pinModal.loading) return;
-  if (key === "⌫") {
-    pinModal.pin = pinModal.pin.slice(0, -1);
-    pinModal.error = "";
-  } else if (pinModal.pin.length < pinModal.maxLength) {
-    pinModal.pin += key;
-    pinModal.error = "";
+  if (pinModal.pin.length >= 4) return;
+  pinModal.pin += key;
+  pinModal.error = "";
+
+  // Auto-submit when 4 digits entered
+  if (pinModal.pin.length === 4) {
+    await confirmDelete();
   }
 }
 
 async function confirmDelete() {
-  if (!pinModal.pin) {
-    pinModal.error = "Please enter the PIN.";
-    return;
-  }
   pinModal.loading = true;
   pinModal.error = "";
   try {
@@ -755,12 +764,18 @@ async function confirmDelete() {
       closePinModal();
       loadReports(currentPage.value);
     } else {
-      pinModal.error = data.error || "Incorrect PIN.";
-      pinModal.loading = false;
-      pinModal.pin = "";
+      // Wrong PIN — shake dots and clear
+      pinModal.shake = true;
+      pinModal.error = "Incorrect PIN. Try again.";
+      setTimeout(() => {
+        pinModal.shake = false;
+        pinModal.pin = "";
+        pinModal.loading = false;
+      }, 600);
     }
   } catch {
     pinModal.error = "Network error. Please try again.";
+    pinModal.pin = "";
     pinModal.loading = false;
   }
 }
@@ -868,6 +883,13 @@ onMounted(() => {
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeLightbox();
   });
+});
+
+onUnmounted(() => {
+  if (detailMap) {
+    detailMap.remove();
+    detailMap = null;
+  }
 });
 </script>
 
@@ -1295,15 +1317,19 @@ tr:hover td {
 }
 
 /* PIN delete modal */
+.pin-modal-body {
+  text-align: center;
+}
 .pin-warning {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--red);
   background: #fdecea;
   border: 1px solid #f5c6c2;
   border-radius: 5px;
-  padding: 10px 14px;
-  margin-bottom: 16px;
+  padding: 9px 14px;
+  margin-bottom: 14px;
   font-weight: 500;
+  text-align: left;
 }
 .pin-record-info {
   font-size: 0.85rem;
@@ -1311,10 +1337,11 @@ tr:hover td {
   border: 1px solid var(--border);
   border-radius: 5px;
   padding: 10px 14px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
   display: flex;
   flex-direction: column;
   gap: 3px;
+  text-align: left;
 }
 .pin-record-info strong {
   color: var(--text-muted);
@@ -1329,22 +1356,24 @@ tr:hover td {
 
 /* PIN dots display */
 .pin-dots-wrap {
-  text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 .pin-dots {
   display: inline-flex;
-  gap: 12px;
+  gap: 16px;
   justify-content: center;
   margin-bottom: 8px;
 }
 .pin-dot {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   border: 2px solid var(--border);
   background: white;
-  transition: all 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    transform 0.15s;
   display: inline-block;
 }
 .pin-dot.filled {
@@ -1352,11 +1381,46 @@ tr:hover td {
   border-color: var(--red);
   transform: scale(1.15);
 }
+/* Shake animation on wrong PIN */
+.pin-dot.shake {
+  animation: pin-shake 0.5s ease;
+}
+@keyframes pin-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  15% {
+    transform: translateX(-6px);
+  }
+  30% {
+    transform: translateX(6px);
+  }
+  45% {
+    transform: translateX(-5px);
+  }
+  60% {
+    transform: translateX(5px);
+  }
+  75% {
+    transform: translateX(-3px);
+  }
+  90% {
+    transform: translateX(3px);
+  }
+}
 .pin-error {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--red);
   font-weight: 600;
   margin-top: 4px;
+  min-height: 18px;
+}
+.pin-checking {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  min-height: 18px;
 }
 
 /* Numpad */
@@ -1365,21 +1429,26 @@ tr:hover td {
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   margin: 0 auto;
-  max-width: 240px;
+  max-width: 220px;
 }
 .numpad-key {
   background: var(--surface);
   border: 1.5px solid var(--border);
-  border-radius: 8px;
-  height: 56px;
+  border-radius: 50%;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto;
   font-family: "DM Sans", sans-serif;
-  font-size: 1.2rem;
+  font-size: 1.3rem;
   font-weight: 600;
   color: var(--text);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.12s;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .numpad-key:hover:not(:disabled):not(.numpad-empty) {
   background: var(--green-pale);
@@ -1387,46 +1456,34 @@ tr:hover td {
   color: var(--green-dark);
 }
 .numpad-key:active:not(:disabled):not(.numpad-empty) {
-  transform: scale(0.93);
-  background: var(--green-mid);
+  transform: scale(0.88);
+  background: var(--green-dark);
+  border-color: var(--green-dark);
   color: white;
 }
 .numpad-empty {
   visibility: hidden;
   pointer-events: none;
 }
-.numpad-back {
-  color: var(--red);
-  font-size: 1rem;
-}
-.numpad-back:hover:not(:disabled) {
-  background: #fdecea !important;
-  border-color: var(--red) !important;
-  color: var(--red) !important;
-}
 .numpad-key:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
-.btn-delete-confirm {
-  background: var(--red);
+.btn-pin-cancel {
+  background: none;
   border: none;
-  border-radius: 5px;
-  padding: 10px 22px;
   font-family: "DM Sans", sans-serif;
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  color: white;
+  color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.2s;
+  padding: 6px 20px;
+  border-radius: 4px;
+  transition: color 0.2s;
 }
-.btn-delete-confirm:hover:not(:disabled) {
-  background: #a93226;
-}
-.btn-delete-confirm:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.btn-pin-cancel:hover {
+  color: var(--red);
 }
 
 /* Geo / map in detail modal */
