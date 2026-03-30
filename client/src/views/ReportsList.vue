@@ -519,11 +519,18 @@ const totalPages = ref(1);
 const currentPage = ref(1);
 const pageSize = ref(25);
 
-const today = new Date();
+function localDateString(date) {
+  const d = date || new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 const d30 = new Date();
 d30.setDate(d30.getDate() - 30);
-const dateFrom = ref(d30.toISOString().split("T")[0]);
-const dateTo = ref(today.toISOString().split("T")[0]);
+const dateFrom = ref(localDateString(d30));
+const dateTo = ref(localDateString());
 
 const filters = reactive({
   search: "",

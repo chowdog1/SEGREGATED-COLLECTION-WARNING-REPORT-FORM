@@ -304,9 +304,18 @@ const geoStatus = ref("idle"); // idle | loading | success | error
 const geoError = ref("");
 let leafletMap = null;
 
+// Returns today's date as YYYY-MM-DD using local timezone (not UTC)
+function localDateString() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function freshForm() {
   return {
-    dateIssued: new Date().toISOString().split("T")[0],
+    dateIssued: localDateString(),
     violations: {
       co3504: false,
       co911: false,
