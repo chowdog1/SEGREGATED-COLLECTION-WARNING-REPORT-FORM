@@ -15,7 +15,7 @@ const upload = multer({
   },
 });
 
-// Compress photo to WebP — smaller than JPEG at same quality
+// Compress photo to WebP
 async function compressImage(buffer) {
   const compressed = await sharp(buffer)
     .resize({
@@ -29,7 +29,7 @@ async function compressImage(buffer) {
   return "data:image/webp;base64," + compressed.toString("base64");
 }
 
-// Compress signature to WebP — much smaller than PNG, lossless for clean line art
+// Compress signature to WebP
 async function compressSignature(base64DataUrl) {
   const base64 = base64DataUrl.replace(/^data:image\/\w+;base64,/, "");
   const buffer = Buffer.from(base64, "base64");
@@ -51,9 +51,49 @@ router.get("/", (req, res) => {
   res.sendFile("index.html", { root: "./public" });
 });
 
-// GET reports page
-router.get("/reports", (req, res) => {
-  res.sendFile("reports.html", { root: "./public" });
+// Image proxy — fetches external images server-side to avoid browser CORS
+router.get("/api/proxy-image", async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).send("Missing url");
+
+  const allowed = [
+    "8upload.com",
+    "staticmap.openstreetmap.de",
+    "tile.openstreetmap.org",
+  ];
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return res.status(400).send("Invalid url");
+  }
+  if (!allowed.some((d) => parsedUrl.hostname.endsWith(d))) {
+    return res.status(403).send("Domain not allowed");
+  }
+
+  try {
+    const https = require("https");
+    const http = require("http");
+    const client = parsedUrl.protocol === "https:" ? https : http;
+    const request = client.get(
+      url,
+      { headers: { "User-Agent": "CENRO-WarningReport/1.0" } },
+      (response) => {
+        if (response.statusCode !== 200) {
+          return res.status(response.statusCode).send("Upstream error");
+        }
+        res.setHeader(
+          "Content-Type",
+          response.headers["content-type"] || "image/png",
+        );
+        res.setHeader("Cache-Control", "public, max-age=3600");
+        response.pipe(res);
+      },
+    );
+    request.on("error", () => res.status(500).send("Fetch error"));
+  } catch (err) {
+    res.status(500).send("Proxy error");
+  }
 });
 
 // POST submit report
@@ -61,15 +101,11 @@ router.post("/api/reports", upload.array("photos", 2), async (req, res) => {
   try {
     const body = req.body;
 
-    // Parse violations
-    const violations = {
-      co3504: body["viol_co3504"] === "on",
-      co911: body["viol_co911"] === "on",
-      co1424ab: body["viol_co1424ab"] === "on",
-      co1424rest: body["viol_co1424rest"] === "on",
-      co1011: body["viol_co1011"] === "on",
-      other: body["viol_other"] === "on",
-      otherText: body["otherText"] || "",
+    // Parse disposal type classifications
+    const disposalTypes = {
+      unsegregated: body["disposal_unsegregated"] === "on",
+      segregated: body["disposal_segregated"] === "on",
+      warning: body["disposal_warning"] === "on",
     };
 
     // Officers: could be array or single string
@@ -93,7 +129,7 @@ router.post("/api/reports", upload.array("photos", 2), async (req, res) => {
 
     const report = new WarningReport({
       dateIssued: new Date(body.dateIssued),
-      violations,
+      disposalTypes,
       apprehendedFirstName: body.apprehendedFirstName,
       apprehendedLastName: body.apprehendedLastName,
       address: body.address,
@@ -128,7 +164,7 @@ router.get("/api/reports", async (req, res) => {
       search,
       barangay,
       officer,
-      violation,
+      disposal, // replaces "violation"
       sort = "newest",
     } = req.query;
 
@@ -136,7 +172,6 @@ router.get("/api/reports", async (req, res) => {
     const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
     const skip = (pageNum - 1) * limitNum;
 
-    // Build MongoDB query
     const query = {};
 
     // Date range filter
@@ -154,7 +189,7 @@ router.get("/api/reports", async (req, res) => {
       }
     }
 
-    // Name search (first or last)
+    // Name search
     if (search) {
       const regex = new RegExp(search, "i");
       query.$or = [
@@ -163,19 +198,14 @@ router.get("/api/reports", async (req, res) => {
       ];
     }
 
-    // Barangay filter
     if (barangay) query.barangay = barangay;
-
-    // Officer filter
     if (officer) query.officers = officer;
 
-    // Violation filter
-    if (violation) {
-      if (violation === "other") query["violations.other"] = true;
-      else query[`violations.${violation}`] = true;
+    // Disposal type filter
+    if (disposal) {
+      query[`disposalTypes.${disposal}`] = true;
     }
 
-    // Sort
     const sortMap = {
       newest: { dateIssued: -1 },
       oldest: { dateIssued: 1 },
@@ -214,17 +244,11 @@ router.get("/api/dashboard", async (req, res) => {
     const startOfToday = new Date(now);
     startOfToday.setHours(0, 0, 0, 0);
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfYear = new Date(now.getFullYear(), 0, 1);
 
-    const [total, today, thisMonth, byBarangay, byViolation, recentReports] =
+    const [total, today, thisMonth, byBarangay, byDisposal, recentReports] =
       await Promise.all([
-        // Total all time
         WarningReport.countDocuments(),
-
-        // Today
         WarningReport.countDocuments({ dateIssued: { $gte: startOfToday } }),
-
-        // This month
         WarningReport.countDocuments({ dateIssued: { $gte: startOfMonth } }),
 
         // Per barangay
@@ -233,29 +257,24 @@ router.get("/api/dashboard", async (req, res) => {
           { $sort: { count: -1 } },
         ]),
 
-        // Per violation type
+        // Per disposal type
         WarningReport.aggregate([
           {
             $group: {
               _id: null,
-              co3504: { $sum: { $cond: ["$violations.co3504", 1, 0] } },
-              co911: { $sum: { $cond: ["$violations.co911", 1, 0] } },
-              co1424ab: { $sum: { $cond: ["$violations.co1424ab", 1, 0] } },
-              co1424rest: { $sum: { $cond: ["$violations.co1424rest", 1, 0] } },
-              co1011: { $sum: { $cond: ["$violations.co1011", 1, 0] } },
-              other: { $sum: { $cond: ["$violations.other", 1, 0] } },
+              unsegregated: {
+                $sum: { $cond: ["$disposalTypes.unsegregated", 1, 0] },
+              },
+              segregated: {
+                $sum: { $cond: ["$disposalTypes.segregated", 1, 0] },
+              },
+              warning: { $sum: { $cond: ["$disposalTypes.warning", 1, 0] } },
             },
           },
         ]),
 
-        // 5 most recent reports
-        WarningReport.find(
-          {},
-          {
-            signature: 0,
-            photos: 0,
-          },
-        )
+        // 5 most recent
+        WarningReport.find({}, { signature: 0, photos: 0 })
           .sort({ dateIssued: -1 })
           .limit(5)
           .lean(),
@@ -266,7 +285,7 @@ router.get("/api/dashboard", async (req, res) => {
       today,
       thisMonth,
       byBarangay,
-      byViolation: byViolation[0] || {},
+      byDisposal: byDisposal[0] || {},
       recentReports,
     });
   } catch (err) {
@@ -311,7 +330,7 @@ router.delete("/api/reports/:id", async (req, res) => {
   }
 });
 
-// GET export to Excel with date range
+// GET export to Excel
 router.get("/api/export", async (req, res) => {
   try {
     const { from, to } = req.query;
@@ -335,7 +354,6 @@ router.get("/api/export", async (req, res) => {
       pageSetup: { orientation: "landscape", fitToPage: true },
     });
 
-    // Header style
     const headerFill = {
       type: "pattern",
       pattern: "solid",
@@ -354,22 +372,26 @@ router.get("/api/export", async (req, res) => {
       bottom: borderStyle,
       right: borderStyle,
     };
+    const dataCellAlignment = {
+      vertical: "top",
+      horizontal: "left",
+      wrapText: true,
+    };
 
     sheet.columns = [
       { header: "Date Issued", key: "dateIssued", width: 14 },
-      { header: "Violations", key: "violations", width: 40 },
+      { header: "Classification", key: "classification", width: 28 },
       { header: "Apprehended Name", key: "apprehendedName", width: 26 },
       { header: "Address", key: "address", width: 28 },
       { header: "Barangay", key: "barangay", width: 18 },
       { header: "Officers", key: "officers", width: 34 },
-      { header: "Remarks", key: "remarks", width: 28 },
+      { header: "Remarks", key: "remarks", width: 36 },
       { header: "Location", key: "location", width: 26 },
       { header: "Signature", key: "signature", width: 24 },
       { header: "Photo 1", key: "photo1", width: 24 },
       { header: "Photo 2", key: "photo2", width: 24 },
     ];
 
-    // Style header row
     const headerRow = sheet.getRow(1);
     headerRow.height = 40;
     headerRow.eachCell((cell) => {
@@ -383,78 +405,77 @@ router.get("/api/export", async (req, res) => {
       cell.border = allBorders;
     });
 
-    const VIOL_LABELS = {
-      co3504: "C.O 35-04 - UNSEGREGATED WASTE",
-      co911: "C.O 9-11 - LITTERING/ILLEGAL DISPOSAL OF GARBAGE",
-      co1424ab: "C.O 14-24 (A&B) - SMOKING IN PUBLIC PLACES",
-      co1424rest: "C.O 14-24 (C-V,X,Y,Z) - PERSON IN CHARGE",
-      co1011: "C.O 10-11 - ILLEGAL DUMPING TO WATERWAYS",
+    const DISPOSAL_LABELS = {
+      unsegregated: "UNSEGREGATED",
+      segregated: "SEGREGATED",
+      warning: "WARNING",
     };
 
-    const IMAGE_ROW_HEIGHT = 80; // points
-    // ExcelJS uses EMUs for ext: 1 pt ≈ 9525 EMUs, col width unit ≈ 7 px per char
-    // We'll use tl/ext approach so images are strictly inside their cell
-    const ROW_HEIGHT_EMU = Math.round(IMAGE_ROW_HEIGHT * 9525);
-    const COL_WIDTH_EMU = Math.round(24 * 7 * 9525); // approx for width-24 cols
+    const IMAGE_ROW_HEIGHT = 80;
 
     for (let i = 0; i < reports.length; i++) {
       const r = reports[i];
-      const rowIndex = i + 2; // 1-based, row 1 is header
+      const rowIndex = i + 2;
+      const hasImages =
+        (r.signature && r.signature.length > 100) ||
+        (r.photos && r.photos.length > 0);
 
-      // Build violations list
-      const violList = [];
-      Object.entries(VIOL_LABELS).forEach(([key, label]) => {
-        if (r.violations[key]) violList.push(label);
-      });
-      if (r.violations.other) violList.push(r.violations.otherText || "Other");
-      const violationsText = violList.join("\n");
+      // Build classification list
+      const classList = Object.entries(DISPOSAL_LABELS)
+        .filter(([key]) => r.disposalTypes && r.disposalTypes[key])
+        .map(([, label]) => label);
+      const classificationText = classList.join(", ") || "—";
 
       const row = sheet.addRow({
         dateIssued: new Date(r.dateIssued).toLocaleDateString("en-PH"),
-        violations: violationsText,
+        classification: classificationText,
         apprehendedName: `${r.apprehendedLastName}, ${r.apprehendedFirstName}`,
         address: r.address,
         barangay: r.barangay,
         officers: (r.officers || []).join("\n"),
-        remarks: r.remarks,
+        remarks: r.remarks || "",
         location: "",
         signature: "",
         photo1: "",
         photo2: "",
       });
 
-      row.height = IMAGE_ROW_HEIGHT;
+      row.height = hasImages ? IMAGE_ROW_HEIGHT : 20;
+
       row.eachCell({ includeEmpty: true }, (cell) => {
         cell.border = allBorders;
-        cell.alignment = {
-          vertical: "middle",
-          horizontal: "left",
-          wrapText: true,
-        };
+        cell.alignment = dataCellAlignment;
+        if (!cell.font) {
+          cell.font = { name: "Calibri", size: 10 };
+        }
       });
 
-      // Location cell — display as coordinates, hyperlink to Google Maps
+      // Location cell
       const locCell = row.getCell("location");
       if (r.geo && r.geo.latitude && r.geo.longitude) {
         const lat = r.geo.latitude.toFixed(6);
         const lng = r.geo.longitude.toFixed(6);
         const mapsUrl = `https://maps.google.com/?q=${lat},${lng}`;
-        locCell.value = {
-          text: `${lat}, ${lng}`,
-          hyperlink: mapsUrl,
-        };
+        locCell.value = { text: `${lat}, ${lng}`, hyperlink: mapsUrl };
         locCell.font = {
+          name: "Calibri",
+          size: 10,
           color: { argb: "FF1155CC" },
           underline: true,
-          size: 10,
         };
-        locCell.alignment = { vertical: "middle", horizontal: "left" };
+        locCell.alignment = dataCellAlignment;
       } else {
         locCell.value = "Not captured";
-        locCell.font = { color: { argb: "FF999999" }, italic: true, size: 10 };
+        locCell.font = {
+          name: "Calibri",
+          size: 10,
+          color: { argb: "FF999999" },
+          italic: true,
+        };
+        locCell.alignment = dataCellAlignment;
       }
 
-      // Embed signature — col 8 (0-based), shifted right by Location column
+      // Embed signature
       if (r.signature && r.signature.length > 100) {
         try {
           const sigBase64 = r.signature.replace(/^data:image\/\w+;base64,/, "");
@@ -472,7 +493,7 @@ router.get("/api/export", async (req, res) => {
         }
       }
 
-      // Embed photos — cols 9 and 10 (0-based)
+      // Embed photos
       const photoCols = [9, 10];
       const rowPhotos = r.photos || [];
       for (let p = 0; p < Math.min(rowPhotos.length, 2); p++) {
@@ -502,7 +523,6 @@ router.get("/api/export", async (req, res) => {
       }
     }
 
-    // Freeze header
     sheet.views = [{ state: "frozen", ySplit: 1 }];
 
     const filename = `warning_reports_${from}_to_${to}.xlsx`;

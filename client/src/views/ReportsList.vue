@@ -61,15 +61,14 @@
       </div>
       <div class="filter-group">
         <select
-          v-model="filters.violation"
+          v-model="filters.disposal"
           @change="applyFilters"
-          :class="{ active: filters.violation }"
+          :class="{ active: filters.disposal }"
         >
-          <option value="">All Violations</option>
-          <option v-for="v in VIOLATIONS" :key="v.key" :value="v.key">
-            {{ v.code }} {{ v.desc }}
+          <option value="">All Classifications</option>
+          <option v-for="d in DISPOSAL_TYPES" :key="d.key" :value="d.key">
+            {{ d.label }}
           </option>
-          <option value="other">Other</option>
         </select>
       </div>
       <div class="filter-group">
@@ -109,7 +108,7 @@
             <thead>
               <tr>
                 <th>Date Issued</th>
-                <th>Violations</th>
+                <th>Classification</th>
                 <th>Apprehended</th>
                 <th>Barangay</th>
                 <th>Officers</th>
@@ -122,10 +121,13 @@
                   <strong>{{ formatDate(r.dateIssued) }}</strong>
                 </td>
                 <td>
-                  <span v-for="v in getViolations(r)" :key="v" class="badge">{{
-                    v
-                  }}</span>
-                  <span v-if="!getViolations(r).length">—</span>
+                  <span
+                    v-for="d in getDisposalTypes(r)"
+                    :key="d"
+                    class="badge"
+                    >{{ d }}</span
+                  >
+                  <span v-if="!getDisposalTypes(r).length">—</span>
                 </td>
                 <td v-html="highlightName(r)"></td>
                 <td>{{ r.barangay }}</td>
@@ -216,7 +218,20 @@
         <div class="modal">
           <div class="modal-header">
             <h2>Warning Report Details</h2>
-            <button class="modal-close" @click="detailModal = false">×</button>
+            <div style="display: flex; align-items: center; gap: 8px">
+              <button
+                v-if="detailRecord"
+                class="btn-print"
+                @click="handlePrint(detailRecord)"
+                :disabled="generatingPdf"
+                title="Save as PDF"
+              >
+                {{ generatingPdf ? "⏳ Generating…" : "📄 Save as PDF" }}
+              </button>
+              <button class="modal-close" @click="detailModal = false">
+                ×
+              </button>
+            </div>
           </div>
           <div class="modal-body" v-if="detailRecord">
             <div class="detail-row">
@@ -226,13 +241,13 @@
               </div>
             </div>
             <div class="detail-row">
-              <div class="detail-label">Violations</div>
+              <div class="detail-label">Classification</div>
               <div class="detail-val">
                 <span
-                  v-for="v in getViolationsFull(detailRecord)"
-                  :key="v"
+                  v-for="d in getDisposalTypesFull(detailRecord)"
+                  :key="d"
                   class="badge"
-                  >{{ v }}</span
+                  >{{ d }}</span
                 >
               </div>
             </div>
@@ -411,7 +426,6 @@
               <span>{{ pinModal.recordName }}</span>
             </div>
 
-            <!-- PIN dot display -->
             <div class="pin-dots-wrap">
               <div class="pin-dots">
                 <span
@@ -430,7 +444,6 @@
               <p v-if="pinModal.loading" class="pin-checking">Verifying…</p>
             </div>
 
-            <!-- On-screen numpad — no backspace, phone style -->
             <div class="numpad">
               <button
                 v-for="key in [
@@ -505,9 +518,42 @@ import {
 import {
   BARANGAYS,
   OFFICERS,
-  VIOLATIONS,
-  VIOL_LABELS,
+  DISPOSAL_TYPES,
+  DISPOSAL_LABELS,
 } from "../composables/constants.js";
+
+// ─── Classification helpers ───────────────────────────────────
+function getDisposalTypes(r) {
+  if (!r || !r.disposalTypes) return [];
+  return Object.entries(r.disposalTypes)
+    .filter(([, v]) => v)
+    .map(([k]) => DISPOSAL_LABELS[k] || k);
+}
+
+function getDisposalTypesFull(r) {
+  if (!r || !r.disposalTypes) return [];
+  return Object.entries(r.disposalTypes)
+    .filter(([, v]) => v)
+    .map(([k]) => DISPOSAL_LABELS[k] || k);
+}
+
+// ─── Highlight search in name (for v-html) ────────────────────
+function highlightName(r) {
+  if (!r) return "—";
+  const fullName = `${r.apprehendedLastName || ""}, ${r.apprehendedFirstName || ""}`;
+  if (!filters.search) return fullName;
+  const search = filters.search.trim().toLowerCase();
+  if (!search) return fullName;
+  try {
+    const regex = new RegExp(`(${search})`, "gi");
+    return fullName.replace(
+      regex,
+      `<mark style="background:#ffe58a;padding:0 2px;border-radius:2px;">$1</mark>`,
+    );
+  } catch {
+    return fullName;
+  }
+}
 
 const showToast = inject("showToast");
 
@@ -536,7 +582,7 @@ const filters = reactive({
   search: "",
   barangay: "",
   officer: "",
-  violation: "",
+  disposal: "",
   sort: "newest",
 });
 
@@ -546,10 +592,19 @@ let searchTimer = null;
 const detailModal = ref(false);
 const detailRecord = ref(null);
 const detailMapEl = ref(null);
+const generatingPdf = ref(false);
 let detailMap = null;
 
+async function handlePrint(r) {
+  generatingPdf.value = true;
+  try {
+    await printReport(r);
+  } finally {
+    generatingPdf.value = false;
+  }
+}
+
 function initDetailMap(lat, lng) {
-  // Load Leaflet CSS
   if (!document.getElementById("leaflet-css")) {
     const link = document.createElement("link");
     link.id = "leaflet-css";
@@ -618,11 +673,11 @@ const activeChips = computed(() => {
         applyFilters();
       },
     });
-  if (filters.violation)
+  if (filters.disposal)
     chips.push({
-      label: `Violation: ${(VIOL_LABELS[filters.violation] || "Other").split(" ").slice(0, 3).join(" ")}`,
+      label: `Classification: ${DISPOSAL_LABELS[filters.disposal] || filters.disposal}`,
       clear: () => {
-        filters.violation = "";
+        filters.disposal = "";
         applyFilters();
       },
     });
@@ -652,7 +707,7 @@ async function loadReports(page = 1) {
   if (filters.search) params.set("search", filters.search);
   if (filters.barangay) params.set("barangay", filters.barangay);
   if (filters.officer) params.set("officer", filters.officer);
-  if (filters.violation) params.set("violation", filters.violation);
+  if (filters.disposal) params.set("disposal", filters.disposal);
 
   try {
     const res = await fetch("/api/reports?" + params);
@@ -671,12 +726,10 @@ async function loadReports(page = 1) {
 function applyFilters() {
   loadReports(1);
 }
-
 function onSearchInput() {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(applyFilters, 350);
 }
-
 function clearSearch() {
   filters.search = "";
   applyFilters();
@@ -685,7 +738,7 @@ function resetFilters() {
   filters.search = "";
   filters.barangay = "";
   filters.officer = "";
-  filters.violation = "";
+  filters.disposal = "";
   filters.sort = "newest";
   applyFilters();
 }
@@ -701,7 +754,6 @@ async function openDetail(id) {
   try {
     const res = await fetch("/api/reports/" + id);
     detailRecord.value = await res.json();
-    // Init map if geo data exists
     if (detailRecord.value.geo?.latitude) {
       await nextTick();
       initDetailMap(
@@ -749,11 +801,7 @@ async function numpadPress(key) {
   if (pinModal.pin.length >= 4) return;
   pinModal.pin += key;
   pinModal.error = "";
-
-  // Auto-submit when 4 digits entered
-  if (pinModal.pin.length === 4) {
-    await confirmDelete();
-  }
+  if (pinModal.pin.length === 4) await confirmDelete();
 }
 
 async function confirmDelete() {
@@ -771,7 +819,6 @@ async function confirmDelete() {
       closePinModal();
       loadReports(currentPage.value);
     } else {
-      // Wrong PIN — shake dots and clear
       pinModal.shake = true;
       pinModal.error = "Incorrect PIN. Try again.";
       setTimeout(() => {
@@ -787,9 +834,459 @@ async function confirmDelete() {
   }
 }
 
+// ─── Leaflet map capture for PDF ──────────────────────────────
+function captureLeafletMap(lat, lng) {
+  return new Promise((resolve) => {
+    const loadLib = (src, check) =>
+      new Promise((res) => {
+        if (check()) {
+          res();
+          return;
+        }
+        const s = document.createElement("script");
+        s.src = src;
+        s.onload = res;
+        document.head.appendChild(s);
+      });
+
+    loadLib(
+      "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
+      () => !!window.html2canvas,
+    ).then(async () => {
+      if (detailMapEl.value && detailMap) {
+        try {
+          const canvas = await window.html2canvas(detailMapEl.value, {
+            useCORS: true,
+            allowTaint: true,
+            scale: 2,
+            logging: false,
+          });
+          resolve({
+            data: canvas.toDataURL("image/png"),
+            w: canvas.width,
+            h: canvas.height,
+          });
+          return;
+        } catch {
+          /* fall through */
+        }
+      }
+
+      const loadLeaflet = () =>
+        new Promise((res2) => {
+          if (window.L) {
+            res2();
+            return;
+          }
+          if (!document.getElementById("leaflet-css")) {
+            const link = document.createElement("link");
+            link.id = "leaflet-css";
+            link.rel = "stylesheet";
+            link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+            document.head.appendChild(link);
+          }
+          const s = document.createElement("script");
+          s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+          s.onload = res2;
+          document.head.appendChild(s);
+        });
+
+      await loadLeaflet();
+      const container = document.createElement("div");
+      container.style.cssText =
+        "position:fixed;left:-9999px;top:-9999px;width:560px;height:220px;z-index:-1;";
+      document.body.appendChild(container);
+      const map = window.L.map(container, {
+        zoomControl: false,
+        attributionControl: false,
+      }).setView([lat, lng], 16);
+      window.L.tileLayer(
+        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      ).addTo(map);
+      window.L.marker([lat, lng]).addTo(map);
+
+      let waited = 0;
+      const check = setInterval(async () => {
+        waited += 300;
+        const tilesLoaded =
+          container.querySelectorAll(".leaflet-tile-loaded").length > 0;
+        if (tilesLoaded || waited >= 5000) {
+          clearInterval(check);
+          await new Promise((r) => setTimeout(r, 400));
+          try {
+            const canvas = await window.html2canvas(container, {
+              useCORS: true,
+              allowTaint: true,
+              scale: 1,
+              logging: false,
+            });
+            resolve({
+              data: canvas.toDataURL("image/png"),
+              w: canvas.width,
+              h: canvas.height,
+            });
+          } catch {
+            resolve(null);
+          } finally {
+            map.remove();
+            document.body.removeChild(container);
+          }
+        }
+      }, 300);
+    });
+  });
+}
+
+// ─── Print / PDF ──────────────────────────────────────────────
+async function printReport(r) {
+  const disposalList = getDisposalTypesFull(r);
+  const fullName = `${r.apprehendedLastName}, ${r.apprehendedFirstName}`;
+  const date = formatDateLong(r.dateIssued);
+  const officers = (r.officers || []).join(", ") || "—";
+
+  const logoProxyUrl =
+    "/api/proxy-image?url=" +
+    encodeURIComponent(
+      "https://8upload.com/image/68be3f83c9e7e/freepik_br_bb4e2098-1dee-4111-8179-ddc41996d8da.png",
+    );
+
+  await loadScript(
+    "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+  );
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  const W = 210,
+    H = 297,
+    ML = 16,
+    MR = 16,
+    CW = W - ML - MR;
+
+  function loadImgBase64(url) {
+    return new Promise(async (resolve) => {
+      try {
+        if (url.startsWith("data:")) {
+          const img = new Image();
+          img.onload = () => {
+            const c = document.createElement("canvas");
+            c.width = img.naturalWidth;
+            c.height = img.naturalHeight;
+            c.getContext("2d").drawImage(img, 0, 0);
+            resolve({
+              data: c.toDataURL("image/png"),
+              w: img.naturalWidth,
+              h: img.naturalHeight,
+            });
+          };
+          img.onerror = () => resolve(null);
+          img.src = url;
+          return;
+        }
+        const res = await fetch(url);
+        if (!res.ok) {
+          resolve(null);
+          return;
+        }
+        const blob = await res.blob();
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            const c = document.createElement("canvas");
+            c.width = img.naturalWidth;
+            c.height = img.naturalHeight;
+            c.getContext("2d").drawImage(img, 0, 0);
+            resolve({
+              data: c.toDataURL("image/png"),
+              w: img.naturalWidth,
+              h: img.naturalHeight,
+            });
+          };
+          img.onerror = () => resolve(null);
+          img.src = reader.result;
+        };
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      } catch {
+        resolve(null);
+      }
+    });
+  }
+
+  const logo = await loadImgBase64(logoProxyUrl);
+  let y = 0;
+
+  function addWatermark() {
+    if (!logo) return;
+    doc.saveGraphicsState();
+    doc.setGState(new doc.GState({ opacity: 0.08 }));
+    const wmSize = 170;
+    doc.addImage(
+      logo.data,
+      "PNG",
+      (W - wmSize) / 2,
+      (H - wmSize) / 2,
+      wmSize,
+      wmSize,
+    );
+    doc.restoreGraphicsState();
+  }
+
+  addWatermark();
+
+  const LOGO_H = 28;
+  if (logo) {
+    const lw = (logo.w / logo.h) * LOGO_H;
+    doc.addImage(logo.data, "PNG", ML, 11, lw, LOGO_H);
+    const textAreaLeft = ML + lw + 4;
+    const textAreaRight = W - MR;
+    const textCenterX = (textAreaLeft + textAreaRight) / 2;
+    const textMidY = 11 + LOGO_H / 2;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(30, 30, 30);
+    doc.text("CITY GOVERNMENT OF SAN JUAN", textCenterX, textMidY - 3, {
+      align: "center",
+    });
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(60, 60, 60);
+    doc.text(
+      "CITY ENVIRONMENT AND NATURAL RESOURCES OFFICE",
+      textCenterX,
+      textMidY + 5,
+      { align: "center" },
+    );
+    y = 11 + LOGO_H + 6;
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(30, 30, 30);
+    doc.text("CITY GOVERNMENT OF SAN JUAN", W / 2, 18, { align: "center" });
+    doc.setFontSize(9);
+    doc.setTextColor(60, 60, 60);
+    doc.text("CITY ENVIRONMENT AND NATURAL RESOURCES OFFICE", W / 2, 25, {
+      align: "center",
+    });
+    y = 32;
+  }
+
+  doc.setFillColor(26, 60, 42);
+  doc.rect(ML, y, CW, 12, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(255, 255, 255);
+  doc.text("WARNING REPORT", W / 2, y + 8.5, { align: "center" });
+  y += 18;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(90, 90, 90);
+  doc.text("Date Issued: ", ML, y);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(26, 26, 26);
+  doc.text(date, ML + 22, y);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(90, 90, 90);
+  doc.text("Barangay: ", W - MR - 50, y);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(26, 26, 26);
+  doc.text(r.barangay || "—", W - MR - 30, y);
+  y += 4;
+  doc.setDrawColor(204, 217, 210);
+  doc.setLineWidth(0.3);
+  doc.line(ML, y, W - MR, y);
+  y += 6;
+
+  function addField(label, value, extraH = 0) {
+    const lines = doc.splitTextToSize(value, CW - 36);
+    const rowH = Math.max(8 + extraH, lines.length * 5 + 4);
+    if (y + rowH > H - 20) {
+      doc.addPage();
+      addWatermark();
+      y = 20;
+    }
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(46, 107, 71);
+    doc.text(label.toUpperCase(), ML, y + 4);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(26, 26, 26);
+    doc.text(lines, ML + 36, y + 4);
+    y += rowH;
+    doc.setDrawColor(232, 240, 236);
+    doc.setLineWidth(0.2);
+    doc.line(ML, y, W - MR, y);
+    y += 3;
+  }
+
+  addField("Classification", disposalList.join(", ") || "—");
+  addField("Apprehended", fullName);
+  addField("Address", r.address || "—");
+  addField("Officers", officers);
+  addField("Remarks", r.remarks || "—");
+
+  if (r.geo?.latitude) {
+    const lat = r.geo.latitude.toFixed(6);
+    const lng = r.geo.longitude.toFixed(6);
+    const acc = r.geo.accuracy
+      ? ` · ~${Math.round(r.geo.accuracy)}m accuracy`
+      : "";
+    addField("Location", `${lat}, ${lng}${acc}`);
+
+    const mapImg = await captureLeafletMap(r.geo.latitude, r.geo.longitude);
+    if (mapImg) {
+      const mw = CW;
+      const mh = mw * (mapImg.h / mapImg.w);
+      const clampedH = Math.min(mh, 60);
+      const clampedW = clampedH * (mapImg.w / mapImg.h);
+      if (y + clampedH > H - 20) {
+        doc.addPage();
+        addWatermark();
+        y = 20;
+      }
+      doc.addImage(mapImg.data, "PNG", ML, y, clampedW, clampedH);
+      doc.setDrawColor(204, 217, 210);
+      doc.setLineWidth(0.3);
+      doc.rect(ML, y, clampedW, clampedH);
+      y += clampedH + 5;
+    }
+  }
+
+  y += 2;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(46, 107, 71);
+  doc.text("SIGNATURE OF APPREHENDED PERSON", ML, y);
+  y += 5;
+
+  if (r.signature) {
+    const sig = await loadImgBase64(r.signature);
+    if (sig) {
+      const sw = 70;
+      const sh = sw * (sig.h / sig.w);
+      if (y + sh + 4 > H - 20) {
+        doc.addPage();
+        addWatermark();
+        y = 20;
+      }
+      doc.setFillColor(250, 250, 250);
+      doc.setDrawColor(204, 217, 210);
+      doc.setLineWidth(0.3);
+      doc.rect(ML, y, sw + 6, sh + 6, "FD");
+      doc.addImage(sig.data, "PNG", ML + 3, y + 3, sw, sh);
+      y += sh + 10;
+    }
+  } else {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(9);
+    doc.setTextColor(154, 154, 154);
+    doc.text("No signature captured", ML, y + 5);
+    y += 12;
+  }
+
+  // Data privacy notice in PDF
+  y += 2;
+  const noticeText =
+    "All data gathered herein is data-protected and shall not be used for any other purpose. " +
+    "This information is collected and processed in strict compliance with the Data Privacy Act " +
+    "of the Philippines (Republic Act No. 10173).";
+  const noticeLines = doc.splitTextToSize(noticeText, CW);
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(7);
+  doc.setTextColor(130, 130, 130);
+  doc.text(noticeLines, ML, y);
+  y += noticeLines.length * 4 + 6;
+
+  if (r.photos && r.photos.length > 0) {
+    doc.addPage();
+    addWatermark();
+    y = 20;
+
+    doc.setFillColor(232, 245, 238);
+    doc.setDrawColor(26, 60, 42);
+    doc.setLineWidth(1.2);
+    doc.line(ML, y, ML, y + 10);
+    doc.rect(ML + 1.5, y, CW - 1.5, 10, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(26, 60, 42);
+    doc.text("PHOTO EVIDENCE", ML + 6, y + 7);
+    y += 16;
+
+    const photos = r.photos.slice(0, 2);
+    const loaded = await Promise.all(photos.map((p) => loadImgBase64(p)));
+
+    if (loaded.length === 1 && loaded[0]) {
+      const photo = loaded[0];
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(46, 107, 71);
+      doc.text("PHOTO 1", ML, y);
+      y += 4;
+      const maxH = 140;
+      const ratio = Math.min(CW / photo.w, maxH / photo.h);
+      const pw = photo.w * ratio,
+        ph = photo.h * ratio;
+      doc.addImage(photo.data, "PNG", ML, y, pw, ph);
+      doc.setDrawColor(204, 217, 210);
+      doc.setLineWidth(0.3);
+      doc.rect(ML, y, pw, ph);
+    } else if (loaded.length === 2) {
+      const half = (CW - 6) / 2;
+      const maxH = 160;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(46, 107, 71);
+      doc.text("PHOTO 1", ML, y);
+      doc.text("PHOTO 2", ML + half + 6, y);
+      y += 4;
+      let ph = 0;
+      const positions = [ML, ML + half + 6];
+      for (let i = 0; i < 2; i++) {
+        const photo = loaded[i];
+        if (!photo) continue;
+        const ratio = Math.min(half / photo.w, maxH / photo.h);
+        ph = Math.max(ph, photo.h * ratio);
+      }
+      for (let i = 0; i < 2; i++) {
+        const photo = loaded[i];
+        if (!photo) continue;
+        const ratio = Math.min(half / photo.w, maxH / photo.h);
+        const pw = photo.w * ratio,
+          pph = photo.h * ratio;
+        const x = positions[i];
+        const yOffset = (ph - pph) / 2;
+        doc.addImage(photo.data, "PNG", x, y + yOffset, pw, pph);
+        doc.setDrawColor(204, 217, 210);
+        doc.setLineWidth(0.3);
+        doc.rect(x, y + yOffset, pw, pph);
+      }
+    }
+  }
+
+  const pdfBlob = doc.output("blob");
+  const url = URL.createObjectURL(pdfBlob);
+  window.open(url, "_blank");
+  setTimeout(() => URL.revokeObjectURL(url), 120000);
+}
+
+function loadScript(src) {
+  return new Promise((resolve) => {
+    if (document.querySelector(`script[src="${src}"]`) && window.jspdf) {
+      resolve();
+      return;
+    }
+    const s = document.createElement("script");
+    s.src = src;
+    s.onload = resolve;
+    document.head.appendChild(s);
+  });
+}
+
 // ─── Lightbox ─────────────────────────────────────────────────
 const lightbox = reactive({ visible: false, src: "" });
-
 function openLightbox(src) {
   lightbox.src = src;
   lightbox.visible = true;
@@ -797,8 +1294,6 @@ function openLightbox(src) {
 function closeLightbox() {
   lightbox.visible = false;
 }
-
-// Close lightbox on Escape key
 
 // ─── Export ───────────────────────────────────────────────────
 function setPreset(preset) {
@@ -833,58 +1328,35 @@ function doExport() {
   }
   exportModal.value = false;
   showToast("Generating Excel file…");
-  window.location.href = `/api/export?from=${exportFrom.value}&to=${exportTo.value}`;
+  const filename = `CENRO_Reports_${exportFrom.value}_to_${exportTo.value}.xlsx`;
+  const a = document.createElement("a");
+  a.href = `/api/export?from=${exportFrom.value}&to=${exportTo.value}`;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => document.body.removeChild(a), 1000);
 }
 
-// ─── Helpers ──────────────────────────────────────────────────
-function formatDate(d) {
-  return new Date(d).toLocaleDateString("en-PH", {
+function formatDate(date) {
+  if (!date) return "—";
+  return new Date(date).toLocaleDateString("en-PH", {
     year: "numeric",
     month: "short",
-    day: "numeric",
+    day: "2-digit",
   });
 }
-function formatDateLong(d) {
-  return new Date(d).toLocaleDateString("en-PH", {
+
+function formatDateLong(date) {
+  if (!date) return "—";
+  return new Date(date).toLocaleDateString("en-PH", {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
 }
 
-function getViolations(r) {
-  return Object.entries(r.violations || {})
-    .filter(([k, v]) => v && k !== "otherText")
-    .map(([k]) =>
-      k === "other"
-        ? r.violations.otherText || "Other"
-        : VIOL_LABELS[k]?.split(" ").slice(0, 3).join(" ") || k,
-    );
-}
-
-function getViolationsFull(r) {
-  return Object.entries(r.violations || {})
-    .filter(([k, v]) => v && k !== "otherText")
-    .map(([k]) =>
-      k === "other" ? r.violations.otherText || "Other" : VIOL_LABELS[k] || k,
-    );
-}
-
-function escapeRegex(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function highlightName(r) {
-  const name = `${r.apprehendedLastName}, ${r.apprehendedFirstName}`;
-  if (!filters.search) return name;
-  return name.replace(
-    new RegExp(`(${escapeRegex(filters.search)})`, "gi"),
-    "<mark>$1</mark>",
-  );
-}
-
 onMounted(() => {
-  exportFrom.value = dateFrom.value;
   exportTo.value = dateTo.value;
   loadReports(1);
   window.addEventListener("keydown", (e) => {
@@ -901,13 +1373,12 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* All styles preserved from original — only label text changed in template */
 .main-wrap {
   max-width: 1100px;
   margin: 28px auto;
   padding: 0 16px 48px;
 }
-
-/* Toolbar */
 .toolbar {
   background: white;
   border: 1px solid var(--border);
@@ -950,8 +1421,6 @@ onUnmounted(() => {
   font-size: 0.8rem;
   font-weight: 600;
 }
-
-/* Filter bar */
 .filter-bar {
   background: white;
   border: 1px solid var(--border);
@@ -1079,8 +1548,6 @@ onUnmounted(() => {
 .filter-chip button:hover {
   color: var(--red);
 }
-
-/* Table */
 .table-wrap {
   background: white;
   border: 1px solid var(--border);
@@ -1128,7 +1595,6 @@ tr:hover td {
   white-space: normal;
   font-size: 0.78rem;
 }
-
 .loading-state {
   text-align: center;
   padding: 48px 24px;
@@ -1147,7 +1613,6 @@ tr:hover td {
   font-size: 3rem;
   margin-bottom: 12px;
 }
-
 .btn-view {
   background: none;
   border: 1.5px solid var(--green-mid);
@@ -1180,8 +1645,6 @@ tr:hover td {
 .btn-del:hover {
   background: #fdecea;
 }
-
-/* Pagination */
 .pagination-wrap {
   display: flex;
   align-items: center;
@@ -1238,8 +1701,6 @@ tr:hover td {
   outline: none;
   border-color: var(--green-mid);
 }
-
-/* Export modal */
 .export-fields {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1312,18 +1773,6 @@ tr:hover td {
   justify-content: flex-end;
   gap: 10px;
 }
-
-@media (max-width: 600px) {
-  .toolbar {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .export-fields {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* PIN delete modal */
 .pin-modal-body {
   text-align: center;
 }
@@ -1360,8 +1809,6 @@ tr:hover td {
   color: var(--text);
   font-weight: 600;
 }
-
-/* PIN dots display */
 .pin-dots-wrap {
   margin-bottom: 20px;
 }
@@ -1388,7 +1835,6 @@ tr:hover td {
   border-color: var(--red);
   transform: scale(1.15);
 }
-/* Shake animation on wrong PIN */
 .pin-dot.shake {
   animation: pin-shake 0.5s ease;
 }
@@ -1429,8 +1875,6 @@ tr:hover td {
   margin-top: 4px;
   min-height: 18px;
 }
-
-/* Numpad */
 .numpad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1476,7 +1920,6 @@ tr:hover td {
   opacity: 0.35;
   cursor: not-allowed;
 }
-
 .btn-pin-cancel {
   background: none;
   border: none;
@@ -1492,8 +1935,21 @@ tr:hover td {
 .btn-pin-cancel:hover {
   color: var(--red);
 }
-
-/* Geo / map in detail modal */
+.btn-print {
+  background: var(--gold);
+  border: none;
+  border-radius: 5px;
+  padding: 5px 14px;
+  font-family: "DM Sans", sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--green-dark);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-print:hover {
+  background: #b8963e;
+}
 .geo-coords {
   font-size: 0.8rem;
   color: var(--text-muted);
@@ -1508,8 +1964,6 @@ tr:hover td {
   overflow: hidden;
   z-index: 0;
 }
-
-/* Photo thumbnail — clickable */
 .photo-thumb {
   cursor: zoom-in;
   transition:
@@ -1520,8 +1974,6 @@ tr:hover td {
   transform: scale(1.04);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
-
-/* Lightbox */
 .lightbox-overlay {
   position: fixed;
   inset: 0;
@@ -1562,8 +2014,6 @@ tr:hover td {
 .lightbox-close:hover {
   background: rgba(255, 255, 255, 0.25);
 }
-
-/* Lightbox transition */
 .lightbox-fade-enter-active {
   transition:
     opacity 0.2s ease,
@@ -1581,5 +2031,14 @@ tr:hover td {
 .lightbox-fade-leave-to {
   opacity: 0;
   transform: scale(0.95);
+}
+@media (max-width: 600px) {
+  .toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .export-fields {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

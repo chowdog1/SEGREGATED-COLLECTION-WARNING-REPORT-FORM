@@ -27,8 +27,6 @@ export const OFFICERS = [
   "MARIELLE YBAÑEZ",
   "DWIGHT BABAGAY",
   "CHARLOTTE CHAN",
-  "JULIUS CEZAR PANGAN",
-  "JOHN PAUL FLORIDA",
   "ABRAHAM MAGTURO",
   "ANGELITA PIMENTEL",
   "ABEGAIL DE ASIS",
@@ -49,34 +47,15 @@ export const OFFICERS = [
   "MARIA LUISA BRAZIL",
 ];
 
-export const VIOLATIONS = [
-  { key: "co3504", code: "C.O 35-04", desc: "UNSEGREGATED WASTE" },
-  {
-    key: "co911",
-    code: "C.O 9-11",
-    desc: "LITTERING / ILLEGAL DISPOSAL OF GARBAGE",
-  },
-  {
-    key: "co1424ab",
-    code: "C.O 14-24 (A&B)",
-    desc: "SMOKING IN PUBLIC PLACES",
-  },
-  {
-    key: "co1424rest",
-    code: "C.O 14-24 (C-V,X,Y,Z)",
-    desc: "PERSON IN CHARGE",
-  },
-  {
-    key: "co1011",
-    code: "C.O 10-11",
-    desc: "ILLEGAL DUMPING TO WATERWAYS SYSTEM",
-  },
+// Disposal classification options
+export const DISPOSAL_TYPES = [
+  { key: "unsegregated", label: "UNSEGREGATED" },
+  { key: "segregated", label: "SEGREGATED" },
+  { key: "warning", label: "WARNING" },
 ];
 
-export const VIOL_LABELS = {
-  co3504: "C.O 35-04 UNSEGREGATED WASTE",
-  co911: "C.O 9-11 LITTERING/ILLEGAL DISPOSAL",
-  co1424ab: "C.O 14-24 (A&B) SMOKING",
-  co1424rest: "C.O 14-24 (C-V,X,Y,Z) PERSON IN CHARGE",
-  co1011: "C.O 10-11 ILLEGAL DUMPING TO WATERWAYS",
+export const DISPOSAL_LABELS = {
+  unsegregated: "UNSEGREGATED",
+  segregated: "SEGREGATED",
+  warning: "WARNING",
 };

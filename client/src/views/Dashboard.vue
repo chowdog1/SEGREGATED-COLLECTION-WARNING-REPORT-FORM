@@ -27,7 +27,7 @@
 
     <!-- Charts row -->
     <div class="charts-row">
-      <!-- Violations per Barangay -->
+      <!-- Reports per Barangay -->
       <div class="chart-card wide">
         <div class="chart-title">Reports per Barangay</div>
         <div class="chart-wrap" v-if="!loading">
@@ -36,11 +36,11 @@
         <div v-else class="chart-loading"><div class="spinner-sm"></div></div>
       </div>
 
-      <!-- Violation type breakdown -->
+      <!-- Classification breakdown -->
       <div class="chart-card">
-        <div class="chart-title">Violation Type Breakdown</div>
+        <div class="chart-title">Classification Breakdown</div>
         <div class="chart-wrap donut-wrap" v-if="!loading">
-          <canvas ref="violationChartEl"></canvas>
+          <canvas ref="disposalChartEl"></canvas>
         </div>
         <div v-else class="chart-loading"><div class="spinner-sm"></div></div>
       </div>
@@ -58,7 +58,7 @@
             <th>Date</th>
             <th>Name</th>
             <th>Barangay</th>
-            <th>Violations</th>
+            <th>Classification</th>
           </tr>
         </thead>
         <tbody>
@@ -67,8 +67,8 @@
             <td>{{ r.apprehendedLastName }}, {{ r.apprehendedFirstName }}</td>
             <td>{{ r.barangay }}</td>
             <td>
-              <span v-for="v in getViolations(r)" :key="v" class="badge">{{
-                v
+              <span v-for="d in getDisposalTypes(r)" :key="d" class="badge">{{
+                d
               }}</span>
             </td>
           </tr>
@@ -90,23 +90,14 @@ import {
   onUnmounted,
   nextTick,
 } from "vue";
-import { VIOL_LABELS } from "../composables/constants.js";
+import { DISPOSAL_LABELS } from "../composables/constants.js";
 
 const loading = ref(true);
 const stats = reactive({});
 const barangayChartEl = ref(null);
-const violationChartEl = ref(null);
+const disposalChartEl = ref(null);
 let barangayChart = null;
-let violationChart = null;
-
-const VIOL_DISPLAY = {
-  co3504: "C.O 35-04",
-  co911: "C.O 9-11",
-  co1424ab: "C.O 14-24 (A&B)",
-  co1424rest: "C.O 14-24 (C-V)",
-  co1011: "C.O 10-11",
-  other: "Other",
-};
+let disposalChart = null;
 
 const CHART_COLORS = [
   "#2e6b47",
@@ -122,15 +113,13 @@ const CHART_COLORS = [
 async function loadStats() {
   loading.value = true;
 
-  // Destroy any existing charts before re-fetching
-  // so canvas elements are clean when re-rendered
   if (barangayChart) {
     barangayChart.destroy();
     barangayChart = null;
   }
-  if (violationChart) {
-    violationChart.destroy();
-    violationChart = null;
+  if (disposalChart) {
+    disposalChart.destroy();
+    disposalChart = null;
   }
 
   try {
@@ -138,10 +127,7 @@ async function loadStats() {
     const data = await res.json();
     Object.assign(stats, data);
 
-    // ✅ FIX: Set loading = false FIRST so v-if renders the canvas elements
     loading.value = false;
-
-    // ✅ FIX: Then wait for DOM to update before drawing charts
     await nextTick();
     renderCharts();
   } catch (e) {
@@ -166,14 +152,12 @@ function loadChartJs() {
 async function renderCharts() {
   await loadChartJs();
   renderBarangayChart();
-  renderViolationChart();
+  renderDisposalChart();
 }
 
 function renderBarangayChart() {
   if (!barangayChartEl.value || !stats.byBarangay) return;
-  if (barangayChart) {
-    barangayChart.destroy();
-  }
+  if (barangayChart) barangayChart.destroy();
 
   const sorted = [...stats.byBarangay].sort((a, b) => b.count - a.count);
   const labels = sorted.map((b) => b._id || "Unknown");
@@ -223,20 +207,18 @@ function renderBarangayChart() {
   });
 }
 
-function renderViolationChart() {
-  if (!violationChartEl.value || !stats.byViolation) return;
-  if (violationChart) {
-    violationChart.destroy();
-  }
+function renderDisposalChart() {
+  if (!disposalChartEl.value || !stats.byDisposal) return;
+  if (disposalChart) disposalChart.destroy();
 
-  const entries = Object.entries(VIOL_DISPLAY)
+  const entries = Object.entries(DISPOSAL_LABELS)
     .map(([key, label]) => ({
       label,
-      value: stats.byViolation[key] || 0,
+      value: stats.byDisposal[key] || 0,
     }))
     .filter((e) => e.value > 0);
 
-  violationChart = new window.Chart(violationChartEl.value, {
+  disposalChart = new window.Chart(disposalChartEl.value, {
     type: "doughnut",
     data: {
       labels: entries.map((e) => e.label),
@@ -281,32 +263,23 @@ function formatDate(d) {
   });
 }
 
-function getViolations(r) {
-  return Object.entries(r.violations || {})
-    .filter(([k, v]) => v && k !== "otherText")
-    .map(([k]) =>
-      k === "other"
-        ? "Other"
-        : VIOL_LABELS[k]?.split(" ").slice(0, 3).join(" ") || k,
-    );
+function getDisposalTypes(r) {
+  return Object.entries(r.disposalTypes || {})
+    .filter(([, v]) => v)
+    .map(([k]) => DISPOSAL_LABELS[k] || k);
 }
 
-// Load on first mount
 onMounted(loadStats);
-
-// Re-load when navigating back (handles keep-alive if ever used)
 onActivated(loadStats);
 
-// Clean up chart instances when leaving the page
-// prevents "Canvas is already in use" errors on return
 onUnmounted(() => {
   if (barangayChart) {
     barangayChart.destroy();
     barangayChart = null;
   }
-  if (violationChart) {
-    violationChart.destroy();
-    violationChart = null;
+  if (disposalChart) {
+    disposalChart.destroy();
+    disposalChart = null;
   }
 });
 </script>

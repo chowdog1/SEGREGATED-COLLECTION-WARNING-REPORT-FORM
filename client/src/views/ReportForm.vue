@@ -5,10 +5,10 @@
       :class="{ 'form-submitting': submitting }"
     >
       <div class="form-card">
-        <!-- SECTION 1: Violation Details -->
+        <!-- SECTION 1: Report Details -->
         <div class="form-section">
           <div class="section-title">
-            <span class="sec-num">1</span> Violation Details
+            <span class="sec-num">1</span> Report Details
           </div>
           <div class="form-row" style="grid-template-columns: 220px 1fr">
             <div class="form-group">
@@ -28,43 +28,22 @@
             class="field-label"
             style="margin-bottom: 10px; display: block"
           >
-            Violations <span class="req">*</span>
+            Classification <span class="req">*</span>
           </label>
-          <div class="violations-grid">
+          <div class="disposal-grid">
             <label
-              v-for="v in VIOLATIONS"
-              :key="v.key"
-              :class="['viol-item', form.violations[v.key] ? 'checked' : '']"
+              v-for="d in DISPOSAL_TYPES"
+              :key="d.key"
+              :class="[
+                'disposal-item',
+                form.disposalTypes[d.key] ? 'checked' : '',
+              ]"
             >
-              <input type="checkbox" v-model="form.violations[v.key]" />
-              <div class="viol-label">
-                <span class="viol-code">{{ v.code }}</span>
-                <span class="viol-desc">{{ v.desc }}</span>
+              <input type="checkbox" v-model="form.disposalTypes[d.key]" />
+              <div class="disposal-label">
+                <span class="disposal-name">{{ d.label }}</span>
               </div>
             </label>
-            <label
-              :class="['viol-item', form.violations.other ? 'checked' : '']"
-            >
-              <input type="checkbox" v-model="form.violations.other" />
-              <div class="viol-label">
-                <span class="viol-code">Other</span>
-                <span class="viol-desc">Specify below</span>
-              </div>
-            </label>
-          </div>
-          <div v-if="form.violations.other" class="other-text-wrap">
-            <div class="form-group">
-              <label class="field-label" for="otherText"
-                >Please specify other violation</label
-              >
-              <input
-                type="text"
-                id="otherText"
-                :value="form.otherText"
-                @input="form.otherText = $event.target.value.toUpperCase()"
-                placeholder="Describe the violation…"
-              />
-            </div>
           </div>
         </div>
 
@@ -178,6 +157,12 @@
             @update="form.signatureData = $event"
             ref="sigCanvas"
           />
+          <p class="data-privacy-notice">
+            All data gathered herein is data-protected and shall not be used for
+            any other purpose. This information is collected and processed in
+            strict compliance with the Data Privacy Act of the Philippines
+            (Republic Act No. 10173).
+          </p>
         </div>
 
         <!-- SECTION 6: Photos -->
@@ -285,7 +270,11 @@
 <script setup>
 import { ref, reactive, inject, onMounted, onUnmounted, nextTick } from "vue";
 import SignatureCanvas from "../components/SignatureCanvas.vue";
-import { BARANGAYS, OFFICERS, VIOLATIONS } from "../composables/constants.js";
+import {
+  BARANGAYS,
+  OFFICERS,
+  DISPOSAL_TYPES,
+} from "../composables/constants.js";
 import {
   queueReport,
   getPendingCount,
@@ -316,15 +305,11 @@ function localDateString() {
 function freshForm() {
   return {
     dateIssued: localDateString(),
-    violations: {
-      co3504: false,
-      co911: false,
-      co1424ab: false,
-      co1424rest: false,
-      co1011: false,
-      other: false,
+    disposalTypes: {
+      unsegregated: false,
+      segregated: false,
+      warning: false,
     },
-    otherText: "",
     apprehendedFirstName: "",
     apprehendedLastName: "",
     address: "",
@@ -358,7 +343,6 @@ async function captureGeo() {
       form.geoAcc = pos.coords.accuracy;
       geoStatus.value = "success";
 
-      // Mount Leaflet map after DOM updates
       await nextTick();
       initMap(form.geoLat, form.geoLng);
     },
@@ -378,7 +362,6 @@ async function captureGeo() {
 function initMap(lat, lng) {
   if (!mapEl.value) return;
 
-  // Load Leaflet CSS dynamically if not loaded yet
   if (!document.getElementById("leaflet-css")) {
     const link = document.createElement("link");
     link.id = "leaflet-css";
@@ -387,7 +370,6 @@ function initMap(lat, lng) {
     document.head.appendChild(link);
   }
 
-  // Load Leaflet JS dynamically
   const loadLeaflet = () =>
     new Promise((resolve) => {
       if (window.L) {
@@ -444,9 +426,9 @@ function onPhotoChange(e, index) {
 
 // ─── Submit ───────────────────────────────────────────────────
 async function submitForm() {
-  const anyViol = Object.values(form.violations).some((v) => v);
-  if (!anyViol) {
-    showToast("Please select at least one violation.", true);
+  const anySelected = Object.values(form.disposalTypes).some((v) => v);
+  if (!anySelected) {
+    showToast("Please select at least one classification.", true);
     return;
   }
 
@@ -460,13 +442,12 @@ async function submitForm() {
   fd.append("barangay", form.barangay);
   fd.append("remarks", form.remarks);
   fd.append("signatureData", form.signatureData);
-  fd.append("otherText", form.otherText);
   if (form.geoLat) fd.append("geoLat", form.geoLat);
   if (form.geoLng) fd.append("geoLng", form.geoLng);
   if (form.geoAcc) fd.append("geoAcc", form.geoAcc);
 
-  Object.entries(form.violations).forEach(([key, val]) => {
-    if (val) fd.append(`viol_${key}`, "on");
+  Object.entries(form.disposalTypes).forEach(([key, val]) => {
+    if (val) fd.append(`disposal_${key}`, "on");
   });
   form.officers.forEach((o) => fd.append("officers", o));
   photoFiles.value.forEach((f) => {
@@ -474,7 +455,6 @@ async function submitForm() {
   });
 
   try {
-    // If offline, queue the report and notify
     if (!navigator.onLine) {
       await queueReport(fd);
       await refreshPendingCount();
@@ -578,50 +558,58 @@ function resetForm() {
   margin-left: 2px;
 }
 
-/* Violations */
-.violations-grid {
+/* Disposal type classification */
+.disposal-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
 }
-.viol-item {
+.disposal-item {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  align-items: center;
+  gap: 12px;
   background: var(--surface);
   border: 1.5px solid var(--border);
   border-radius: 6px;
-  padding: 12px 14px;
+  padding: 16px 18px;
   cursor: pointer;
   transition: all 0.2s;
 }
-.viol-item:hover,
-.viol-item.checked {
+.disposal-item:hover,
+.disposal-item.checked {
   border-color: var(--green-mid);
   background: var(--green-pale);
 }
-.viol-item input[type="checkbox"] {
+.disposal-item input[type="checkbox"] {
   width: 18px;
   height: 18px;
   accent-color: var(--green-mid);
   flex-shrink: 0;
-  margin-top: 2px;
   cursor: pointer;
 }
-.viol-label {
-  font-size: 0.82rem;
-  line-height: 1.4;
+.disposal-label {
+  font-size: 0.88rem;
+  line-height: 1.3;
 }
-.viol-code {
+.disposal-name {
   font-weight: 700;
   color: var(--green-dark);
   display: block;
+  letter-spacing: 0.04em;
 }
-.viol-desc {
+
+/* Data privacy notice */
+.data-privacy-notice {
+  margin-top: 14px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--green-mid);
+  border-radius: 4px;
+  font-size: 0.75rem;
   color: var(--text-muted);
-}
-.other-text-wrap {
-  margin-top: 10px;
+  line-height: 1.6;
+  font-style: italic;
 }
 
 /* Officers */
@@ -826,7 +814,7 @@ function resetForm() {
   .form-row {
     grid-template-columns: 1fr;
   }
-  .violations-grid {
+  .disposal-grid {
     grid-template-columns: 1fr;
   }
   .officers-grid {

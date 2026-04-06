@@ -19,7 +19,6 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use("/", require("./routes/reports"));
 
 // SPA fallback — send index.html for any non-API route
-// Vue Router handles all frontend navigation client-side
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
