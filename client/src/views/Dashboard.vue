@@ -27,7 +27,6 @@
 
     <!-- Charts row -->
     <div class="charts-row">
-      <!-- Reports per Barangay -->
       <div class="chart-card wide">
         <div class="chart-title">Reports per Barangay</div>
         <div class="chart-wrap" v-if="!loading">
@@ -36,7 +35,6 @@
         <div v-else class="chart-loading"><div class="spinner-sm"></div></div>
       </div>
 
-      <!-- Classification breakdown -->
       <div class="chart-card">
         <div class="chart-title">Classification Breakdown</div>
         <div class="chart-wrap donut-wrap" v-if="!loading">
@@ -56,7 +54,7 @@
         <thead>
           <tr>
             <th>Date</th>
-            <th>Name</th>
+            <th>Household Owner</th>
             <th>Barangay</th>
             <th>Classification</th>
           </tr>
@@ -64,7 +62,9 @@
         <tbody>
           <tr v-for="r in stats.recentReports" :key="r._id">
             <td>{{ formatDate(r.dateIssued) }}</td>
-            <td>{{ r.apprehendedLastName }}, {{ r.apprehendedFirstName }}</td>
+            <td>
+              {{ r.householdOwnerLastName }}, {{ r.householdOwnerFirstName }}
+            </td>
             <td>{{ r.barangay }}</td>
             <td>
               <span v-for="d in getDisposalTypes(r)" :key="d" class="badge">{{
@@ -112,7 +112,6 @@ const CHART_COLORS = [
 
 async function loadStats() {
   loading.value = true;
-
   if (barangayChart) {
     barangayChart.destroy();
     barangayChart = null;
@@ -121,12 +120,10 @@ async function loadStats() {
     disposalChart.destroy();
     disposalChart = null;
   }
-
   try {
     const res = await fetch("/api/dashboard");
     const data = await res.json();
     Object.assign(stats, data);
-
     loading.value = false;
     await nextTick();
     renderCharts();
@@ -158,19 +155,15 @@ async function renderCharts() {
 function renderBarangayChart() {
   if (!barangayChartEl.value || !stats.byBarangay) return;
   if (barangayChart) barangayChart.destroy();
-
   const sorted = [...stats.byBarangay].sort((a, b) => b.count - a.count);
-  const labels = sorted.map((b) => b._id || "Unknown");
-  const data = sorted.map((b) => b.count);
-
   barangayChart = new window.Chart(barangayChartEl.value, {
     type: "bar",
     data: {
-      labels,
+      labels: sorted.map((b) => b._id || "Unknown"),
       datasets: [
         {
           label: "Reports",
-          data,
+          data: sorted.map((b) => b.count),
           backgroundColor: "#2e6b47",
           borderRadius: 4,
           hoverBackgroundColor: "#c9a84c",
@@ -196,10 +189,7 @@ function renderBarangayChart() {
           grid: { color: "#e8f5ee" },
         },
         x: {
-          ticks: {
-            font: { family: "DM Sans", size: 11 },
-            maxRotation: 45,
-          },
+          ticks: { font: { family: "DM Sans", size: 11 }, maxRotation: 45 },
           grid: { display: false },
         },
       },
@@ -212,10 +202,7 @@ function renderDisposalChart() {
   if (disposalChart) disposalChart.destroy();
 
   const entries = Object.entries(DISPOSAL_LABELS)
-    .map(([key, label]) => ({
-      label,
-      value: stats.byDisposal[key] || 0,
-    }))
+    .map(([key, label]) => ({ label, value: stats.byDisposal[key] || 0 }))
     .filter((e) => e.value > 0);
 
   disposalChart = new window.Chart(disposalChartEl.value, {
@@ -271,7 +258,6 @@ function getDisposalTypes(r) {
 
 onMounted(loadStats);
 onActivated(loadStats);
-
 onUnmounted(() => {
   if (barangayChart) {
     barangayChart.destroy();
@@ -290,8 +276,6 @@ onUnmounted(() => {
   margin: 28px auto;
   padding: 0 16px 48px;
 }
-
-/* Stat cards */
 .stat-cards {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -332,8 +316,6 @@ onUnmounted(() => {
   letter-spacing: 0.06em;
   margin-top: 4px;
 }
-
-/* Charts */
 .charts-row {
   display: grid;
   grid-template-columns: 1fr 380px;
@@ -371,8 +353,6 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
 }
-
-/* Recent reports table */
 .recent-card {
   background: white;
   border: 1px solid var(--border);
@@ -412,7 +392,6 @@ tr:nth-child(even) {
 tr:hover td {
   background: var(--green-pale);
 }
-
 @media (max-width: 768px) {
   .stat-cards {
     grid-template-columns: 1fr;

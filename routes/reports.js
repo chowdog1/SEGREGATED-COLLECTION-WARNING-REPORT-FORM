@@ -5,17 +5,15 @@ const sharp = require("sharp");
 const ExcelJS = require("exceljs");
 const WarningReport = require("../models/WarningReport");
 
-// multer memory storage (we'll compress with sharp before saving)
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB limit per file
+  limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith("image/")) cb(null, true);
     else cb(new Error("Only image files allowed"));
   },
 });
 
-// Compress photo to WebP
 async function compressImage(buffer) {
   const compressed = await sharp(buffer)
     .resize({
@@ -29,7 +27,6 @@ async function compressImage(buffer) {
   return "data:image/webp;base64," + compressed.toString("base64");
 }
 
-// Compress signature to WebP
 async function compressSignature(base64DataUrl) {
   const base64 = base64DataUrl.replace(/^data:image\/\w+;base64,/, "");
   const buffer = Buffer.from(base64, "base64");
@@ -46,16 +43,15 @@ async function compressSignature(base64DataUrl) {
   return "data:image/webp;base64," + compressed.toString("base64");
 }
 
-// GET homepage (form)
+// GET homepage
 router.get("/", (req, res) => {
   res.sendFile("index.html", { root: "./public" });
 });
 
-// Image proxy — fetches external images server-side to avoid browser CORS
+// Image proxy
 router.get("/api/proxy-image", async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).send("Missing url");
-
   const allowed = [
     "8upload.com",
     "staticmap.openstreetmap.de",
@@ -67,10 +63,8 @@ router.get("/api/proxy-image", async (req, res) => {
   } catch {
     return res.status(400).send("Invalid url");
   }
-  if (!allowed.some((d) => parsedUrl.hostname.endsWith(d))) {
+  if (!allowed.some((d) => parsedUrl.hostname.endsWith(d)))
     return res.status(403).send("Domain not allowed");
-  }
-
   try {
     const https = require("https");
     const http = require("http");
@@ -79,9 +73,8 @@ router.get("/api/proxy-image", async (req, res) => {
       url,
       { headers: { "User-Agent": "CENRO-WarningReport/1.0" } },
       (response) => {
-        if (response.statusCode !== 200) {
+        if (response.statusCode !== 200)
           return res.status(response.statusCode).send("Upstream error");
-        }
         res.setHeader(
           "Content-Type",
           response.headers["content-type"] || "image/png",
@@ -91,7 +84,7 @@ router.get("/api/proxy-image", async (req, res) => {
       },
     );
     request.on("error", () => res.status(500).send("Fetch error"));
-  } catch (err) {
+  } catch {
     res.status(500).send("Proxy error");
   }
 });
@@ -101,37 +94,33 @@ router.post("/api/reports", upload.array("photos", 2), async (req, res) => {
   try {
     const body = req.body;
 
-    // Parse disposal type classifications
     const disposalTypes = {
       unsegregated: body["disposal_unsegregated"] === "on",
       segregated: body["disposal_segregated"] === "on",
       warning: body["disposal_warning"] === "on",
+      noWaste: body["disposal_noWaste"] === "on",
     };
 
-    // Officers: could be array or single string
     let officers = body.officers || [];
     if (typeof officers === "string") officers = [officers];
 
-    // Compress signature if present
     let signature = "";
     if (body.signatureData && body.signatureData.length > 100) {
       signature = await compressSignature(body.signatureData);
     }
 
-    // Compress photos
     let photos = [];
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
-        const compressed = await compressImage(file.buffer);
-        photos.push(compressed);
+        photos.push(await compressImage(file.buffer));
       }
     }
 
     const report = new WarningReport({
       dateIssued: new Date(body.dateIssued),
       disposalTypes,
-      apprehendedFirstName: body.apprehendedFirstName,
-      apprehendedLastName: body.apprehendedLastName,
+      householdOwnerFirstName: body.householdOwnerFirstName,
+      householdOwnerLastName: body.householdOwnerLastName,
       address: body.address,
       barangay: body.barangay,
       officers,
@@ -153,7 +142,7 @@ router.post("/api/reports", upload.array("photos", 2), async (req, res) => {
   }
 });
 
-// GET reports — paginated, filtered, server-side
+// GET reports — paginated, filtered
 router.get("/api/reports", async (req, res) => {
   try {
     const {
@@ -164,17 +153,15 @@ router.get("/api/reports", async (req, res) => {
       search,
       barangay,
       officer,
-      disposal, // replaces "violation"
+      disposal,
       sort = "newest",
     } = req.query;
 
     const pageNum = Math.max(1, parseInt(page));
     const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
     const skip = (pageNum - 1) * limitNum;
-
     const query = {};
 
-    // Date range filter
     if (from || to) {
       query.dateIssued = {};
       if (from) {
@@ -189,28 +176,23 @@ router.get("/api/reports", async (req, res) => {
       }
     }
 
-    // Name search
     if (search) {
       const regex = new RegExp(search, "i");
       query.$or = [
-        { apprehendedFirstName: regex },
-        { apprehendedLastName: regex },
+        { householdOwnerFirstName: regex },
+        { householdOwnerLastName: regex },
       ];
     }
 
     if (barangay) query.barangay = barangay;
     if (officer) query.officers = officer;
-
-    // Disposal type filter
-    if (disposal) {
-      query[`disposalTypes.${disposal}`] = true;
-    }
+    if (disposal) query[`disposalTypes.${disposal}`] = true;
 
     const sortMap = {
       newest: { dateIssued: -1 },
       oldest: { dateIssued: 1 },
-      name_az: { apprehendedLastName: 1, apprehendedFirstName: 1 },
-      name_za: { apprehendedLastName: -1, apprehendedFirstName: -1 },
+      name_az: { householdOwnerLastName: 1, householdOwnerFirstName: 1 },
+      name_za: { householdOwnerLastName: -1, householdOwnerFirstName: -1 },
     };
     const sortObj = sortMap[sort] || sortMap.newest;
 
@@ -250,14 +232,10 @@ router.get("/api/dashboard", async (req, res) => {
         WarningReport.countDocuments(),
         WarningReport.countDocuments({ dateIssued: { $gte: startOfToday } }),
         WarningReport.countDocuments({ dateIssued: { $gte: startOfMonth } }),
-
-        // Per barangay
         WarningReport.aggregate([
           { $group: { _id: "$barangay", count: { $sum: 1 } } },
           { $sort: { count: -1 } },
         ]),
-
-        // Per disposal type
         WarningReport.aggregate([
           {
             $group: {
@@ -269,11 +247,10 @@ router.get("/api/dashboard", async (req, res) => {
                 $sum: { $cond: ["$disposalTypes.segregated", 1, 0] },
               },
               warning: { $sum: { $cond: ["$disposalTypes.warning", 1, 0] } },
+              noWaste: { $sum: { $cond: ["$disposalTypes.noWaste", 1, 0] } },
             },
           },
         ]),
-
-        // 5 most recent
         WarningReport.find({}, { signature: 0, photos: 0 })
           .sort({ dateIssued: -1 })
           .limit(5)
@@ -309,20 +286,21 @@ router.delete("/api/reports/:id", async (req, res) => {
   try {
     const { pin } = req.body;
     const correctPin = process.env.DELETE_PIN;
-
-    if (!correctPin) {
-      return res.status(500).json({
-        success: false,
-        error: "DELETE_PIN is not configured in .env",
-      });
-    }
+    if (!correctPin)
+      return res
+        .status(500)
+        .json({
+          success: false,
+          error: "DELETE_PIN is not configured in .env",
+        });
     if (!pin || pin.toString() !== correctPin.toString()) {
-      return res.status(403).json({
-        success: false,
-        error: "Incorrect PIN. Deletion not authorized.",
-      });
+      return res
+        .status(403)
+        .json({
+          success: false,
+          error: "Incorrect PIN. Deletion not authorized.",
+        });
     }
-
     await WarningReport.findByIdAndDelete(req.params.id);
     res.json({ success: true });
   } catch (err) {
@@ -381,7 +359,7 @@ router.get("/api/export", async (req, res) => {
     sheet.columns = [
       { header: "Date Issued", key: "dateIssued", width: 14 },
       { header: "Classification", key: "classification", width: 28 },
-      { header: "Apprehended Name", key: "apprehendedName", width: 26 },
+      { header: "Household Owner", key: "ownerName", width: 26 },
       { header: "Address", key: "address", width: 28 },
       { header: "Barangay", key: "barangay", width: 18 },
       { header: "Officers", key: "officers", width: 34 },
@@ -409,6 +387,7 @@ router.get("/api/export", async (req, res) => {
       unsegregated: "UNSEGREGATED",
       segregated: "SEGREGATED",
       warning: "WARNING",
+      noWaste: "NO WASTE",
     };
 
     const IMAGE_ROW_HEIGHT = 80;
@@ -420,16 +399,14 @@ router.get("/api/export", async (req, res) => {
         (r.signature && r.signature.length > 100) ||
         (r.photos && r.photos.length > 0);
 
-      // Build classification list
       const classList = Object.entries(DISPOSAL_LABELS)
         .filter(([key]) => r.disposalTypes && r.disposalTypes[key])
         .map(([, label]) => label);
-      const classificationText = classList.join(", ") || "—";
 
       const row = sheet.addRow({
         dateIssued: new Date(r.dateIssued).toLocaleDateString("en-PH"),
-        classification: classificationText,
-        apprehendedName: `${r.apprehendedLastName}, ${r.apprehendedFirstName}`,
+        classification: classList.join(", ") || "—",
+        ownerName: `${r.householdOwnerLastName}, ${r.householdOwnerFirstName}`,
         address: r.address,
         barangay: r.barangay,
         officers: (r.officers || []).join("\n"),
@@ -445,12 +422,9 @@ router.get("/api/export", async (req, res) => {
       row.eachCell({ includeEmpty: true }, (cell) => {
         cell.border = allBorders;
         cell.alignment = dataCellAlignment;
-        if (!cell.font) {
-          cell.font = { name: "Calibri", size: 10 };
-        }
+        if (!cell.font) cell.font = { name: "Calibri", size: 10 };
       });
 
-      // Location cell
       const locCell = row.getCell("location");
       if (r.geo && r.geo.latitude && r.geo.longitude) {
         const lat = r.geo.latitude.toFixed(6);
@@ -475,7 +449,6 @@ router.get("/api/export", async (req, res) => {
         locCell.alignment = dataCellAlignment;
       }
 
-      // Embed signature
       if (r.signature && r.signature.length > 100) {
         try {
           const sigBase64 = r.signature.replace(/^data:image\/\w+;base64,/, "");
@@ -488,12 +461,11 @@ router.get("/api/export", async (req, res) => {
             ext: { width: Math.round(24 * 7), height: IMAGE_ROW_HEIGHT - 4 },
             editAs: "oneCell",
           });
-        } catch (e) {
+        } catch {
           /* skip */
         }
       }
 
-      // Embed photos
       const photoCols = [9, 10];
       const rowPhotos = r.photos || [];
       for (let p = 0; p < Math.min(rowPhotos.length, 2); p++) {
@@ -516,7 +488,7 @@ router.get("/api/export", async (req, res) => {
               ext: { width: Math.round(24 * 7), height: IMAGE_ROW_HEIGHT - 4 },
               editAs: "oneCell",
             });
-          } catch (e) {
+          } catch {
             /* skip */
           }
         }

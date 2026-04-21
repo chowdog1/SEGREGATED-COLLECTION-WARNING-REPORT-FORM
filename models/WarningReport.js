@@ -6,9 +6,10 @@ const warningReportSchema = new mongoose.Schema({
     unsegregated: { type: Boolean, default: false },
     segregated: { type: Boolean, default: false },
     warning: { type: Boolean, default: false },
+    noWaste: { type: Boolean, default: false },
   },
-  apprehendedFirstName: { type: String, required: true },
-  apprehendedLastName: { type: String, required: true },
+  householdOwnerFirstName: { type: String, required: true },
+  householdOwnerLastName: { type: String, required: true },
   address: { type: String, required: true },
   barangay: { type: String, required: true },
   officers: [{ type: String }],
@@ -26,8 +27,8 @@ const warningReportSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-warningReportSchema.virtual("apprehendedName").get(function () {
-  return `${this.apprehendedLastName}, ${this.apprehendedFirstName}`;
+warningReportSchema.virtual("householdOwnerName").get(function () {
+  return `${this.householdOwnerLastName}, ${this.householdOwnerFirstName}`;
 });
 
 warningReportSchema.set("toJSON", { virtuals: true });

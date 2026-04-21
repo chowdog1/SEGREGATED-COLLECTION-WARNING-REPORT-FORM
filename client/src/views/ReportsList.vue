@@ -32,7 +32,7 @@
         <input
           type="text"
           v-model="filters.search"
-          placeholder="Search by first or last name…"
+          placeholder="Search by household owner name…"
           @input="onSearchInput"
         />
         <button v-if="filters.search" class="search-clear" @click="clearSearch">
@@ -81,7 +81,6 @@
       </div>
       <button class="btn-reset" @click="resetFilters">↺ Reset</button>
 
-      <!-- Active filter chips -->
       <div v-if="activeChips.length" class="active-filters">
         <div v-for="chip in activeChips" :key="chip.label" class="filter-chip">
           <span>{{ chip.label }}</span>
@@ -96,12 +95,10 @@
         <div class="spinner-sm"></div>
         <p>Loading reports…</p>
       </div>
-
       <div v-else-if="reports.length === 0" class="empty-state">
         <div class="empty-icon">📋</div>
         <p>No reports found.</p>
       </div>
-
       <template v-else>
         <div class="table-scroll">
           <table>
@@ -109,7 +106,7 @@
               <tr>
                 <th>Date Issued</th>
                 <th>Classification</th>
-                <th>Apprehended</th>
+                <th>Household Owner</th>
                 <th>Barangay</th>
                 <th>Officers</th>
                 <th>Actions</th>
@@ -143,7 +140,7 @@
                     @click="
                       openPinModal(
                         r._id,
-                        `${r.apprehendedLastName}, ${r.apprehendedFirstName}`,
+                        `${r.householdOwnerLastName}, ${r.householdOwnerFirstName}`,
                       )
                     "
                   >
@@ -252,11 +249,11 @@
               </div>
             </div>
             <div class="detail-row">
-              <div class="detail-label">Apprehended</div>
+              <div class="detail-label">Household Owner</div>
               <div class="detail-val">
                 <strong
-                  >{{ detailRecord.apprehendedLastName }},
-                  {{ detailRecord.apprehendedFirstName }}</strong
+                  >{{ detailRecord.householdOwnerLastName }},
+                  {{ detailRecord.householdOwnerFirstName }}</strong
                 >
               </div>
             </div>
@@ -362,8 +359,7 @@
                 margin-bottom: 18px;
               "
             >
-              Select the date range for the records you want to export. The file
-              will include all fields, signatures, and photos.
+              Select the date range for the records you want to export.
             </p>
             <div class="export-fields">
               <div class="form-group-ex">
@@ -425,7 +421,6 @@
               <strong>Record to delete:</strong>
               <span>{{ pinModal.recordName }}</span>
             </div>
-
             <div class="pin-dots-wrap">
               <div class="pin-dots">
                 <span
@@ -443,7 +438,6 @@
               </p>
               <p v-if="pinModal.loading" class="pin-checking">Verifying…</p>
             </div>
-
             <div class="numpad">
               <button
                 v-for="key in [
@@ -469,7 +463,6 @@
                 {{ key }}
               </button>
             </div>
-
             <div style="text-align: center; margin-top: 14px">
               <button
                 class="btn-pin-cancel"
@@ -531,16 +524,13 @@ function getDisposalTypes(r) {
 }
 
 function getDisposalTypesFull(r) {
-  if (!r || !r.disposalTypes) return [];
-  return Object.entries(r.disposalTypes)
-    .filter(([, v]) => v)
-    .map(([k]) => DISPOSAL_LABELS[k] || k);
+  return getDisposalTypes(r);
 }
 
-// ─── Highlight search in name (for v-html) ────────────────────
+// ─── Highlight search in name ─────────────────────────────────
 function highlightName(r) {
   if (!r) return "—";
-  const fullName = `${r.apprehendedLastName || ""}, ${r.apprehendedFirstName || ""}`;
+  const fullName = `${r.householdOwnerLastName || ""}, ${r.householdOwnerFirstName || ""}`;
   if (!filters.search) return fullName;
   const search = filters.search.trim().toLowerCase();
   if (!search) return fullName;
@@ -585,7 +575,6 @@ const filters = reactive({
   disposal: "",
   sort: "newest",
 });
-
 let searchTimer = null;
 
 // ─── Detail modal ─────────────────────────────────────────────
@@ -696,9 +685,8 @@ const activeChips = computed(() => {
 async function loadReports(page = 1) {
   currentPage.value = page;
   loading.value = true;
-
   const params = new URLSearchParams({
-    page: page,
+    page,
     limit: pageSize.value,
     sort: filters.sort,
   });
@@ -708,7 +696,6 @@ async function loadReports(page = 1) {
   if (filters.barangay) params.set("barangay", filters.barangay);
   if (filters.officer) params.set("officer", filters.officer);
   if (filters.disposal) params.set("disposal", filters.disposal);
-
   try {
     const res = await fetch("/api/reports?" + params);
     const data = await res.json();
@@ -779,31 +766,31 @@ const pinModal = reactive({
 });
 
 function openPinModal(id, name) {
-  pinModal.visible = true;
-  pinModal.recordId = id;
-  pinModal.recordName = name;
-  pinModal.pin = "";
-  pinModal.error = "";
-  pinModal.loading = false;
-  pinModal.shake = false;
+  Object.assign(pinModal, {
+    visible: true,
+    recordId: id,
+    recordName: name,
+    pin: "",
+    error: "",
+    loading: false,
+    shake: false,
+  });
 }
-
 function closePinModal() {
-  pinModal.visible = false;
-  pinModal.pin = "";
-  pinModal.error = "";
-  pinModal.loading = false;
-  pinModal.shake = false;
+  Object.assign(pinModal, {
+    visible: false,
+    pin: "",
+    error: "",
+    loading: false,
+    shake: false,
+  });
 }
-
 async function numpadPress(key) {
-  if (pinModal.loading) return;
-  if (pinModal.pin.length >= 4) return;
+  if (pinModal.loading || pinModal.pin.length >= 4) return;
   pinModal.pin += key;
   pinModal.error = "";
   if (pinModal.pin.length === 4) await confirmDelete();
 }
-
 async function confirmDelete() {
   pinModal.loading = true;
   pinModal.error = "";
@@ -848,7 +835,6 @@ function captureLeafletMap(lat, lng) {
         s.onload = res;
         document.head.appendChild(s);
       });
-
     loadLib(
       "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
       () => !!window.html2canvas,
@@ -871,7 +857,6 @@ function captureLeafletMap(lat, lng) {
           /* fall through */
         }
       }
-
       const loadLeaflet = () =>
         new Promise((res2) => {
           if (window.L) {
@@ -890,7 +875,6 @@ function captureLeafletMap(lat, lng) {
           s.onload = res2;
           document.head.appendChild(s);
         });
-
       await loadLeaflet();
       const container = document.createElement("div");
       container.style.cssText =
@@ -904,7 +888,6 @@ function captureLeafletMap(lat, lng) {
         "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
       ).addTo(map);
       window.L.marker([lat, lng]).addTo(map);
-
       let waited = 0;
       const check = setInterval(async () => {
         waited += 300;
@@ -940,7 +923,7 @@ function captureLeafletMap(lat, lng) {
 // ─── Print / PDF ──────────────────────────────────────────────
 async function printReport(r) {
   const disposalList = getDisposalTypesFull(r);
-  const fullName = `${r.apprehendedLastName}, ${r.apprehendedFirstName}`;
+  const fullName = `${r.householdOwnerLastName}, ${r.householdOwnerFirstName}`;
   const date = formatDateLong(r.dateIssued);
   const officers = (r.officers || []).join(", ") || "—";
 
@@ -955,7 +938,6 @@ async function printReport(r) {
   );
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-
   const W = 210,
     H = 297,
     ML = 16,
@@ -1038,9 +1020,7 @@ async function printReport(r) {
   if (logo) {
     const lw = (logo.w / logo.h) * LOGO_H;
     doc.addImage(logo.data, "PNG", ML, 11, lw, LOGO_H);
-    const textAreaLeft = ML + lw + 4;
-    const textAreaRight = W - MR;
-    const textCenterX = (textAreaLeft + textAreaRight) / 2;
+    const textCenterX = (ML + lw + 4 + W - MR) / 2;
     const textMidY = 11 + LOGO_H / 2;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
@@ -1048,7 +1028,6 @@ async function printReport(r) {
     doc.text("CITY GOVERNMENT OF SAN JUAN", textCenterX, textMidY - 3, {
       align: "center",
     });
-    doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(60, 60, 60);
     doc.text(
@@ -1122,7 +1101,7 @@ async function printReport(r) {
   }
 
   addField("Classification", disposalList.join(", ") || "—");
-  addField("Apprehended", fullName);
+  addField("Household Owner", fullName);
   addField("Address", r.address || "—");
   addField("Officers", officers);
   addField("Remarks", r.remarks || "—");
@@ -1134,13 +1113,12 @@ async function printReport(r) {
       ? ` · ~${Math.round(r.geo.accuracy)}m accuracy`
       : "";
     addField("Location", `${lat}, ${lng}${acc}`);
-
     const mapImg = await captureLeafletMap(r.geo.latitude, r.geo.longitude);
     if (mapImg) {
-      const mw = CW;
-      const mh = mw * (mapImg.h / mapImg.w);
-      const clampedH = Math.min(mh, 60);
-      const clampedW = clampedH * (mapImg.w / mapImg.h);
+      const mw = CW,
+        mh = mw * (mapImg.h / mapImg.w);
+      const clampedH = Math.min(mh, 60),
+        clampedW = clampedH * (mapImg.w / mapImg.h);
       if (y + clampedH > H - 20) {
         doc.addPage();
         addWatermark();
@@ -1158,14 +1136,14 @@ async function printReport(r) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
   doc.setTextColor(46, 107, 71);
-  doc.text("SIGNATURE OF APPREHENDED PERSON", ML, y);
+  doc.text("SIGNATURE OF HOUSEHOLD OWNER", ML, y);
   y += 5;
 
   if (r.signature) {
     const sig = await loadImgBase64(r.signature);
     if (sig) {
-      const sw = 70;
-      const sh = sw * (sig.h / sig.w);
+      const sw = 70,
+        sh = sw * (sig.h / sig.w);
       if (y + sh + 4 > H - 20) {
         doc.addPage();
         addWatermark();
@@ -1186,7 +1164,7 @@ async function printReport(r) {
     y += 12;
   }
 
-  // Data privacy notice in PDF
+  // Data privacy notice
   y += 2;
   const noticeText =
     "All data gathered herein is data-protected and shall not be used for any other purpose. " +
@@ -1203,7 +1181,6 @@ async function printReport(r) {
     doc.addPage();
     addWatermark();
     y = 20;
-
     doc.setFillColor(232, 245, 238);
     doc.setDrawColor(26, 60, 42);
     doc.setLineWidth(1.2);
@@ -1225,8 +1202,8 @@ async function printReport(r) {
       doc.setTextColor(46, 107, 71);
       doc.text("PHOTO 1", ML, y);
       y += 4;
-      const maxH = 140;
-      const ratio = Math.min(CW / photo.w, maxH / photo.h);
+      const maxH = 140,
+        ratio = Math.min(CW / photo.w, maxH / photo.h);
       const pw = photo.w * ratio,
         ph = photo.h * ratio;
       doc.addImage(photo.data, "PNG", ML, y, pw, ph);
@@ -1234,8 +1211,8 @@ async function printReport(r) {
       doc.setLineWidth(0.3);
       doc.rect(ML, y, pw, ph);
     } else if (loaded.length === 2) {
-      const half = (CW - 6) / 2;
-      const maxH = 160;
+      const half = (CW - 6) / 2,
+        maxH = 160;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(7.5);
       doc.setTextColor(46, 107, 71);
@@ -1256,8 +1233,8 @@ async function printReport(r) {
         const ratio = Math.min(half / photo.w, maxH / photo.h);
         const pw = photo.w * ratio,
           pph = photo.h * ratio;
-        const x = positions[i];
-        const yOffset = (ph - pph) / 2;
+        const x = positions[i],
+          yOffset = (ph - pph) / 2;
         doc.addImage(photo.data, "PNG", x, y + yOffset, pw, pph);
         doc.setDrawColor(204, 217, 210);
         doc.setLineWidth(0.3);
@@ -1346,7 +1323,6 @@ function formatDate(date) {
     day: "2-digit",
   });
 }
-
 function formatDateLong(date) {
   if (!date) return "—";
   return new Date(date).toLocaleDateString("en-PH", {
@@ -1363,7 +1339,6 @@ onMounted(() => {
     if (e.key === "Escape") closeLightbox();
   });
 });
-
 onUnmounted(() => {
   if (detailMap) {
     detailMap.remove();
@@ -1373,7 +1348,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* All styles preserved from original — only label text changed in template */
 .main-wrap {
   max-width: 1100px;
   margin: 28px auto;
@@ -1447,7 +1421,7 @@ onUnmounted(() => {
   pointer-events: none;
 }
 .search-wrap input[type="text"] {
-  padding: 8px 32px 8px 32px;
+  padding: 8px 32px;
   border: 1.5px solid var(--border);
   border-radius: 5px;
   font-family: "DM Sans", sans-serif;

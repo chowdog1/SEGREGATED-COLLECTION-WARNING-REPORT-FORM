@@ -47,10 +47,10 @@
           </div>
         </div>
 
-        <!-- SECTION 2: Person Apprehended -->
+        <!-- SECTION 2: Details of Household Owner -->
         <div class="form-section">
           <div class="section-title">
-            <span class="sec-num">2</span> Person Apprehended
+            <span class="sec-num">2</span> Details of Household Owner
           </div>
           <div class="form-row">
             <div class="form-group">
@@ -60,9 +60,10 @@
               <input
                 type="text"
                 id="firstName"
-                :value="form.apprehendedFirstName"
+                :value="form.householdOwnerFirstName"
                 @input="
-                  form.apprehendedFirstName = $event.target.value.toUpperCase()
+                  form.householdOwnerFirstName =
+                    $event.target.value.toUpperCase()
                 "
                 required
                 placeholder="First name"
@@ -75,9 +76,10 @@
               <input
                 type="text"
                 id="lastName"
-                :value="form.apprehendedLastName"
+                :value="form.householdOwnerLastName"
                 @input="
-                  form.apprehendedLastName = $event.target.value.toUpperCase()
+                  form.householdOwnerLastName =
+                    $event.target.value.toUpperCase()
                 "
                 required
                 placeholder="Last name"
@@ -151,7 +153,7 @@
         <!-- SECTION 5: Signature -->
         <div class="form-section">
           <div class="section-title">
-            <span class="sec-num">5</span> Signature of Apprehended Person
+            <span class="sec-num">5</span> Signature of Household Owner
           </div>
           <SignatureCanvas
             @update="form.signatureData = $event"
@@ -289,11 +291,10 @@ const photoPreviews = ref([null, null]);
 const photoFiles = ref([null, null]);
 
 // Geo state
-const geoStatus = ref("idle"); // idle | loading | success | error
+const geoStatus = ref("idle");
 const geoError = ref("");
 let leafletMap = null;
 
-// Returns today's date as YYYY-MM-DD using local timezone (not UTC)
 function localDateString() {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -309,9 +310,10 @@ function freshForm() {
       unsegregated: false,
       segregated: false,
       warning: false,
+      noWaste: false,
     },
-    apprehendedFirstName: "",
-    apprehendedLastName: "",
+    householdOwnerFirstName: "",
+    householdOwnerLastName: "",
     address: "",
     barangay: "",
     officers: [],
@@ -332,17 +334,14 @@ async function captureGeo() {
     geoError.value = "Geolocation is not supported by this browser";
     return;
   }
-
   geoStatus.value = "loading";
   geoError.value = "";
-
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
       form.geoLat = pos.coords.latitude;
       form.geoLng = pos.coords.longitude;
       form.geoAcc = pos.coords.accuracy;
       geoStatus.value = "success";
-
       await nextTick();
       initMap(form.geoLat, form.geoLng);
     },
@@ -361,7 +360,6 @@ async function captureGeo() {
 
 function initMap(lat, lng) {
   if (!mapEl.value) return;
-
   if (!document.getElementById("leaflet-css")) {
     const link = document.createElement("link");
     link.id = "leaflet-css";
@@ -369,7 +367,6 @@ function initMap(lat, lng) {
     link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
     document.head.appendChild(link);
   }
-
   const loadLeaflet = () =>
     new Promise((resolve) => {
       if (window.L) {
@@ -381,19 +378,15 @@ function initMap(lat, lng) {
       script.onload = resolve;
       document.head.appendChild(script);
     });
-
   loadLeaflet().then(() => {
     if (leafletMap) {
       leafletMap.remove();
       leafletMap = null;
     }
-
     leafletMap = window.L.map(mapEl.value).setView([lat, lng], 17);
-
     window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap contributors",
     }).addTo(leafletMap);
-
     window.L.marker([lat, lng])
       .addTo(leafletMap)
       .bindPopup("Submission location")
@@ -404,7 +397,6 @@ function initMap(lat, lng) {
 onMounted(() => {
   captureGeo();
 });
-
 onUnmounted(() => {
   if (leafletMap) {
     leafletMap.remove();
@@ -431,13 +423,12 @@ async function submitForm() {
     showToast("Please select at least one classification.", true);
     return;
   }
-
   submitting.value = true;
 
   const fd = new FormData();
   fd.append("dateIssued", form.dateIssued);
-  fd.append("apprehendedFirstName", form.apprehendedFirstName);
-  fd.append("apprehendedLastName", form.apprehendedLastName);
+  fd.append("householdOwnerFirstName", form.householdOwnerFirstName);
+  fd.append("householdOwnerLastName", form.householdOwnerLastName);
   fd.append("address", form.address);
   fd.append("barangay", form.barangay);
   fd.append("remarks", form.remarks);
@@ -464,7 +455,6 @@ async function submitForm() {
       resetForm();
       return;
     }
-
     const res = await fetch("/api/reports", { method: "POST", body: fd });
     const data = await res.json();
     if (data.success) {
@@ -558,10 +548,10 @@ function resetForm() {
   margin-left: 2px;
 }
 
-/* Disposal type classification */
+/* Disposal classification — 4 columns */
 .disposal-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 }
 .disposal-item {
@@ -571,7 +561,7 @@ function resetForm() {
   background: var(--surface);
   border: 1.5px solid var(--border);
   border-radius: 6px;
-  padding: 16px 18px;
+  padding: 16px 14px;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -588,7 +578,7 @@ function resetForm() {
   cursor: pointer;
 }
 .disposal-label {
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   line-height: 1.3;
 }
 .disposal-name {
@@ -733,7 +723,7 @@ function resetForm() {
   cursor: not-allowed;
 }
 
-/* Geo location */
+/* Geo */
 .geo-status {
   display: flex;
   align-items: center;
@@ -799,8 +789,6 @@ function resetForm() {
   overflow: hidden;
   z-index: 0;
 }
-
-/* Subtle pulse when submitting */
 .form-submitting .form-card {
   opacity: 0.6;
   pointer-events: none;
@@ -815,7 +803,7 @@ function resetForm() {
     grid-template-columns: 1fr;
   }
   .disposal-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
   }
   .officers-grid {
     grid-template-columns: 1fr 1fr;

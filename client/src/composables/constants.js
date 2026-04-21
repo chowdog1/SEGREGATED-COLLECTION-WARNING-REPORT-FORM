@@ -52,10 +52,12 @@ export const DISPOSAL_TYPES = [
   { key: "unsegregated", label: "UNSEGREGATED" },
   { key: "segregated", label: "SEGREGATED" },
   { key: "warning", label: "WARNING" },
+  { key: "noWaste", label: "NO WASTE" },
 ];
 
 export const DISPOSAL_LABELS = {
   unsegregated: "UNSEGREGATED",
   segregated: "SEGREGATED",
   warning: "WARNING",
+  noWaste: "NO WASTE",
 };
